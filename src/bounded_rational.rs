@@ -1,5 +1,5 @@
-use num_bigint::BigInt;
 use lazy_static::lazy_static;
+use num_bigint::BigInt;
 
 /*------------- Primitive constants -------------- */
 pub const MAX_SIZE: u32 = 10_000;
