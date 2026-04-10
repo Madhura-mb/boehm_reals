@@ -78,7 +78,7 @@ impl BoundedRational {
     }
 
     /// Returns `true` id rational is too large to be useful.
-    /// 
+    ///
     /// Specifically, returns `true` when `numerator.bits() + denominator.bits() > MAX_SIZE`.
     /// Pure integers (denominator == 1) are always considered representable and skip the
     /// bit-count check entirely.
@@ -90,7 +90,7 @@ impl BoundedRational {
     }
 
     /// Returns a clone of this rational with a positive denominator.
-    /// 
+    ///
     /// If the denominator is negative, both numerator and denominator are negated,
     /// preserving the value while ensuring `denominator > 0`. If the denominator is
     /// already positive (or zero, which is invalid). the value is returned unchanged.
