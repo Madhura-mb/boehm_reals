@@ -77,7 +77,7 @@ impl BoundedRational {
         Self::from_bigint(BigInt::from(n))
     }
 
-    /// Returns `true` id rational is too large to be useful.
+    /// Returns `true` if rational is too large to be useful.
     ///
     /// Specifically, returns `true` when `numerator.bits() + denominator.bits() > MAX_SIZE`.
     /// Pure integers (denominator == 1) are always considered representable and skip the
