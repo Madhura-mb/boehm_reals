@@ -49,3 +49,43 @@ pub struct BoundedRational {
     /// The bottom half of the fraction. Must never be zero.
     pub denominator: BigInt,
 }
+
+impl BoundedRational {
+    /// Creates a new `BoundedRational` with the given numerator and denominator.
+    pub fn new(n: BigInt, d: BigInt) -> Self {
+        BoundedRational {
+            numerator: n,
+            denominator: d,
+        }
+    }
+
+    /// Creates a `BoundedRational` equal to the integer `n` (denominator = 1).
+    pub fn from_bigint(n: BigInt) -> Self {
+        BoundedRational {
+            numerator: n,
+            denominator: ONE.clone(),
+        }
+    }
+
+    /// Creates a `BoundedRational` from two `i64` values.
+    pub fn from_longs(n: i64, d: i64) -> Self {
+        Self::new(BigInt::from(n), BigInt::from(d))
+    }
+
+    /// Creates a `BoundedRational` equal to the integer `n` (denominator = 1).
+    pub fn from_long(n: i64) -> Self {
+        Self::from_bigint(BigInt::from(n))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_longs_stores_numerator_and_denominator() {
+        let r = BoundedRational::from_longs(3, 4);
+        assert_eq!(r.numerator, BigInt::from(3i64));
+        assert_eq!(r.denominator, BigInt::from(4i64));
+    }
+}
