@@ -76,10 +76,37 @@ impl BoundedRational {
     pub fn from_long(n: i64) -> Self {
         Self::from_bigint(BigInt::from(n))
     }
+
+    /// Returns `true` id rational is too large to be useful.
+    /// 
+    /// Specifically, returns `true` when `numerator.bits() + denominator.bits() > MAX_SIZE`.
+    /// Pure integers (denominator == 1) are always considered representable and skip the
+    /// bit-count check entirely.
+    pub fn too_big(&self) -> bool {
+        if self.denominator == *ONE {
+            return false;
+        }
+        self.numerator.bits() + self.denominator.bits() > MAX_SIZE as u64
+    }
+
+    /// Returns a clone of this rational with a positive denominator.
+    /// 
+    /// If the denominator is negative, both numerator and denominator are negated,
+    /// preserving the value while ensuring `denominator > 0`. If the denominator is
+    /// already positive (or zero, which is invalid). the value is returned unchanged.
+    pub fn positive_den(&self) -> BoundedRational {
+        if self.denominator.sign() == num_bigint::Sign::Minus {
+            BoundedRational::new(-&self.numerator, -&self.denominator)
+        } else {
+            self.clone()
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::i64;
+
     use super::*;
 
     #[test]
@@ -87,5 +114,41 @@ mod tests {
         let r = BoundedRational::from_longs(3, 4);
         assert_eq!(r.numerator, BigInt::from(3i64));
         assert_eq!(r.denominator, BigInt::from(4i64));
+    }
+
+    #[test]
+    fn too_big_pure_integer_is_never_too_big() {
+        let r = BoundedRational::from_long(i64::MAX);
+        assert!(!r.too_big());
+    }
+
+    #[test]
+    fn too_big_small_fraction_is_not_too_big() {
+        let r = BoundedRational::from_longs(3, 4);
+        assert!(!r.too_big());
+    }
+
+    #[test]
+    fn positive_den_positive_denominator_unchanged() {
+        let r = BoundedRational::from_longs(3, 4);
+        let p = r.positive_den();
+        assert_eq!(p.numerator, BigInt::from(3i64));
+        assert_eq!(p.denominator, BigInt::from(4i64));
+    }
+
+    #[test]
+    fn positive_den_negative_denominator_flips_both_signs() {
+        let r = BoundedRational::from_longs(3, -4);
+        let p = r.positive_den();
+        assert_eq!(p.numerator, BigInt::from(-3i64));
+        assert_eq!(p.denominator, BigInt::from(4i64));
+    }
+
+    #[test]
+    fn positive_den_negative_num_and_den_flips_both() {
+        let r = BoundedRational::from_longs(-3, -4);
+        let p = r.positive_den();
+        assert_eq!(p.numerator, BigInt::from(3i64));
+        assert_eq!(p.denominator, BigInt::from(4i64));
     }
 }
