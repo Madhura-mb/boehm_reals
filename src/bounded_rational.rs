@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn too_big_small_fraction_is_not_too_big() {
+    fn small_fraction_is_not_too_big() {
         let r = BoundedRational::from_longs(3, 4);
         assert!(!r.too_big());
     }
