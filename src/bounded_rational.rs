@@ -50,7 +50,14 @@ pub struct BoundedRational {
     pub denominator: BigInt,
 }
 
-impl BoundedRational {
+   // read-only access
+    pub fn numerator(&self) -> &BigInt {
+        &self.numerator
+    }
+
+    pub fn denominator(&self) -> &BigInt {
+        &self.denominator
+    }
     /// Creates a new `BoundedRational` with the given numerator and denominator.
     pub fn new(n: BigInt, d: BigInt) -> Self {
         BoundedRational {
