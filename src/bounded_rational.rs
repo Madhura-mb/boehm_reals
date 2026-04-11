@@ -47,7 +47,8 @@ pub struct BoundedRational {
     /// The top half of the fraction.
     pub numerator: BigInt,
     /// The bottom half of the fraction. Must never be zero.
-    pub denominator: BigInt,
+    numerator: BigInt,    // no `pub`
+    denominator: BigInt,  // no `pub`
 }
 
    // read-only access
