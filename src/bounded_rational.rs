@@ -45,20 +45,22 @@ pub static FIVE: Lazy<BigInt> = Lazy::new(|| BigInt::from(5i32));
 #[derive(Clone, Debug)]
 pub struct BoundedRational {
     /// The top half of the fraction.
-    pub numerator: BigInt,
+    numerator: BigInt,
     /// The bottom half of the fraction. Must never be zero.
-    numerator: BigInt,    // no `pub`
-    denominator: BigInt,  // no `pub`
+    denominator: BigInt,
 }
 
-   // read-only access
+impl BoundedRational {
+    /// read-only access
     pub fn numerator(&self) -> &BigInt {
         &self.numerator
     }
 
+    /// read-only access
     pub fn denominator(&self) -> &BigInt {
         &self.denominator
     }
+
     /// Creates a new `BoundedRational` with the given numerator and denominator.
     pub fn new(n: BigInt, d: BigInt) -> Self {
         BoundedRational {
