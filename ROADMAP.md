@@ -8,7 +8,7 @@ Development is tracked through [GitHub Issues](https://github.com/Madhura-mb/boe
 
 ## M1 — Core Foundation  
 🔗 [View Milestone](https://github.com/Madhura-mb/boehm_reals/milestone/1)  
-📅 **Target: 11th of April 2026** · ✅ **~75% Complete**
+📅 **Target: April 2026** · ✅ **~75% Complete**
 
 Struct definition, constants, constructors, and foundational helpers.
 
@@ -22,7 +22,7 @@ Struct definition, constants, constructors, and foundational helpers.
 
 ## M2 — Arithmetic Core  
 🔗 [View Milestone](https://github.com/Madhura-mb/boehm_reals/milestone/2)  
-📅 **Target: 15th of April 2026**
+📅 **Target: April 2026**
 
 The operations that make `BoundedRational` useful as an exact number type.
 
@@ -35,7 +35,7 @@ The operations that make `BoundedRational` useful as an exact number type.
 
 ## M3 — Complete & Usable  
 🔗 [View Milestone](https://github.com/Madhura-mb/boehm_reals/milestone/3)  
-📅 **Target: 18th of April 2026**
+📅 **Target: April 2026**
 
 Comparisons, conversions, utilities, and full integration support.
 
