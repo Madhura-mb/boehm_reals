@@ -74,7 +74,7 @@ impl BoundedRational {
     }
 
     /// Creates a new `BoundedRational` with the given numerator and denominator.
-    /// 
+    ///
     /// Error: Returns `Err(ZeroDenominatorError)` if `d` is zero.
     pub fn new(n: BigInt, d: BigInt) -> Result<Self, ZeroDenominatorError> {
         if d == *ZERO {
@@ -95,7 +95,7 @@ impl BoundedRational {
     }
 
     /// Creates a `BoundedRational` from two `i64` values.
-    /// 
+    ///
     /// Error: Returns `Err(ZeroDenominatorError)` if `d` is zero.
     pub fn from_longs(n: i64, d: i64) -> Result<Self, ZeroDenominatorError> {
         Self::new(BigInt::from(n), BigInt::from(d))
@@ -109,7 +109,7 @@ impl BoundedRational {
     /// Returns `true` if rational is too large to be useful.
     ///
     /// Specifically, returns `true` when `numerator.bits() + denominator.bits() > MAX_SIZE`.
-    /// 
+    ///
     /// # Preferential treatment for integers (denominator == 1)
     /// Pure integers skip the bit-count check entirely and always return `false`,
     /// even if the numerator alone exceeds MAX_SIZE bits. This is intentional:
@@ -138,14 +138,14 @@ impl BoundedRational {
     /// If the denominator is negative, both numerator and denominator are negated,
     /// preserving the value while ensuring `denominator > 0`. If the denominator is
     /// already positive. the value is returned unchanged.
-    /// 
-    /// Note: a zero denominator cannot arise here because `new` rejects it at 
+    ///
+    /// Note: a zero denominator cannot arise here because `new` rejects it at
     /// construction time.
     pub fn positive_den(&self) -> BoundedRational {
         if self.denominator < *ZERO {
-            BoundedRational { 
-                numerator: -&self.numerator, 
-                denominator: -&self.denominator 
+            BoundedRational {
+                numerator: -&self.numerator,
+                denominator: -&self.denominator,
             }
         } else {
             self.clone()
@@ -169,7 +169,10 @@ mod tests {
 
     #[test]
     fn zero_denominator_error_display() {
-        assert_eq!(ZeroDenominatorError.to_string(), "denominator must not be zero");
+        assert_eq!(
+            ZeroDenominatorError.to_string(),
+            "denominator must not be zero"
+        );
     }
 
     #[test]
@@ -355,10 +358,7 @@ mod tests {
     fn too_big_one_over_limit_is_true() {
         // bits(num) + bits(den) == MAX_SIZE + 1  →  strictly greater, so true
         let half = MAX_SIZE as u64 / 2;
-        let r = BoundedRational::new(
-            big_with_bits(half + 1),
-            big_with_bits(half),
-        ).unwrap();
+        let r = BoundedRational::new(big_with_bits(half + 1), big_with_bits(half)).unwrap();
         assert!(r.too_big());
     }
 
@@ -366,7 +366,7 @@ mod tests {
     fn too_big_sign_does_not_affect_result() {
         // bits() ignores sign — negative values with same magnitude behave identically
         let half = MAX_SIZE as u64 / 2;
-        let pos = BoundedRational::new(big_with_bits(half + 1),  big_with_bits(half)).unwrap();
+        let pos = BoundedRational::new(big_with_bits(half + 1), big_with_bits(half)).unwrap();
         let neg = BoundedRational::new(-big_with_bits(half + 1), big_with_bits(half)).unwrap();
         assert_eq!(pos.too_big(), neg.too_big());
     }
