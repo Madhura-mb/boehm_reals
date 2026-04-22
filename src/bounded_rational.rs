@@ -81,7 +81,7 @@ impl BoundedRational {
             return Err(ZeroDenominatorError);
         }
         if n == *ZERO {
-            return Ok(BoundedRational { 
+            return Ok(BoundedRational {
                 numerator: ZERO.clone(),
                 denominator: ONE.clone(),
             });
