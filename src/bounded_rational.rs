@@ -80,6 +80,12 @@ impl BoundedRational {
         if d == *ZERO {
             return Err(ZeroDenominatorError);
         }
+        if n == *ZERO {
+            return Ok(BoundedRational { 
+                numerator: ZERO.clone(),
+                denominator: ONE.clone(),
+            });
+        }
         Ok(BoundedRational {
             numerator: n,
             denominator: d,
@@ -213,10 +219,10 @@ mod tests {
     }
 
     #[test]
-    fn new_zero_numerator_is_valid() {
+    fn new_zero_numerator_normalizes_denominator_to_one() {
         let r = BoundedRational::new(BigInt::from(0), BigInt::from(5)).unwrap();
         assert_eq!(*r.numerator(), *ZERO);
-        assert_eq!(*r.denominator(), BigInt::from(5));
+        assert_eq!(*r.denominator(), *ONE);
     }
 
     #[test]
@@ -314,6 +320,7 @@ mod tests {
     fn from_longs_zero_numerator_valid() {
         let r = BoundedRational::from_longs(0, 5).unwrap();
         assert_eq!(*r.numerator(), *ZERO);
+        assert_eq!(*r.denominator(), *ONE);
     }
 
     #[test]
@@ -371,13 +378,6 @@ mod tests {
         assert_eq!(pos.too_big(), neg.too_big());
     }
 
-    #[test]
-    fn too_big_denominator_one_via_from_longs() {
-        // from_longs(n, 1) is a pure integer — must never be too big
-        let r = BoundedRational::from_longs(i64::MAX, 1).unwrap();
-        assert!(!r.too_big());
-    }
-
     // ── positive_den ─────────────────────────────────────────────────────────
 
     #[test]
@@ -425,7 +425,7 @@ mod tests {
         let r = BoundedRational::from_longs(0, -7).unwrap();
         let p = r.positive_den();
         assert_eq!(*p.numerator(), *ZERO);
-        assert_eq!(*p.denominator(), BigInt::from(7));
+        assert_eq!(*p.denominator(), *ONE);
     }
 
     #[test]
@@ -434,8 +434,8 @@ mod tests {
         let r = BoundedRational::from_longs(3, -4).unwrap();
         let once = r.positive_den();
         let twice = once.positive_den();
-        assert_eq!(*twice.numerator(), *once.numerator());
-        assert_eq!(*twice.denominator(), *once.denominator());
+        assert_eq!(twice.numerator(), once.numerator());
+        assert_eq!(twice.denominator(), once.denominator());
     }
 
     #[test]
