@@ -7,6 +7,8 @@
 /// # Example
 ///
 /// ```
+/// use boehm_reals::creals::string_float_rep::StringFloatRep;
+///
 /// let rep = StringFloatRep::new(1, "314159".to_string(), 10, 1);
 /// assert_eq!(rep.to_string(), "314159E1");
 /// ```
@@ -59,7 +61,9 @@ impl StringFloatRep {
     /// # Examples
     ///
     /// ```
-    /// // Represents -0.5 × 10^1 = -5.0
+    /// use boehm_reals::creals::string_float_rep::StringFloatRep;
+    ///
+    /// // sign=-1, mantissa=0.5, so value = -1 × 0.5 × 10^1 = -5.0
     /// let rep = StringFloatRep::new(-1, "5".to_string(), 10, 1);
     /// ```
     pub fn new(sign: i8, mantissa: String, radix: u32, exponent: i32) -> Self {
@@ -82,6 +86,8 @@ impl std::fmt::Display for StringFloatRep {
     /// # Examples
     ///
     /// ```
+    /// use boehm_reals::creals::string_float_rep::StringFloatRep;
+    ///
     /// // Base 10: sign=-1, mantissa=0.5, exponent=1 → prints as "-5E1"
     /// let rep = StringFloatRep::new(-1, "5".to_string(), 10, 1);
     /// assert_eq!(rep.to_string(), "-5E1");
