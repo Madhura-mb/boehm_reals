@@ -1,5 +1,7 @@
 use num_bigint::BigInt;
 use once_cell::sync::Lazy;
+use num_integer::Integer;
+use rand::Rng;
 
 /// Maximum combined bit length of numerator and denominator.
 /// If `numerator.bits() + denominator.bits()` exceeds this value,
@@ -155,6 +157,65 @@ impl BoundedRational {
             }
         } else {
             self.clone()
+        }
+    }
+
+    /// Return an equivalent fractions in lowest terms.
+    /// 
+    /// Divides both numerator and denominator by their GCD.
+    /// Denominator sign is **not** normalized here - call [`positive_den`]
+    /// afterwards is a canonical positive denominator is required.
+    /// 
+    /// An early return fireswhen the denominator is already `1`, because an 
+    /// integer needs no reduction.
+    /// 
+    /// [`positive_den`]: BoundedRational::positive_den
+    pub fn reduce(&self) -> BoundedRational {
+        // already an integer - nothing to cancel.
+        if self.denominator == *ONE {
+            return self.clone();
+        }
+
+        let divisor = self.numerator.gcd(&self.denominator);
+
+        BoundedRational { 
+            numerator: &self.numerator / &divisor, 
+            denominator: &self.denominator / &divisor, 
+        }
+    }
+
+    /// Return a possibly-reduced `BoundedRational`, or `None` if the value
+    /// is too large to represent usefully.
+    /// 
+    /// # Reduction policy
+    /// Reduction (via [`reduce`] + [`positive_den`]) is performed when either:
+    /// - the value is already [`too_big`], **or**
+    /// - a 1-in-16 random chance fies (to reduce GCD cost across many ops).
+    /// 
+    /// After reducing, if teh result is still [`too_big`], `None` is returned
+    /// so the caller can fall back to constructive-real arithmetic.
+    /// 
+    /// # None propagation
+    /// `None` input -> `None` output immediately, with no reduction attempted.
+    /// 
+    /// [`reduce`]: BoundedRational::reduce
+    /// [`positive_den`]: BoundedRational::positive_den
+    /// [`too_big`]: BoundedRational::too_big
+    pub fn maybe_reduce(r: Option<BoundedRational>) -> Option<BoundedRational> {
+        let r = r?; // propagate None immediately
+
+        let should_reduce = r.too_big() || (rand::rng().next_u32() & 0xf) == 0;
+
+        if !should_reduce {
+            return  Some(r);
+        }
+
+        let result = r.positive_den().reduce();
+
+        if result.too_big() {
+            None
+        } else {
+            Some(result)
         }
     }
 }
@@ -448,5 +509,109 @@ mod tests {
             r.numerator() * p.denominator(),
             p.numerator() * r.denominator()
         );
+    }
+
+    // ── reduce ───────────────────────────────────────────────────────────────
+
+    /// Acceptance criterion: reduce() on 6/4 returns 3/2
+    #[test]
+    fn reduce_six_fourths_gives_three_halves() {
+        let r = BoundedRational::from_longs(6,4).unwrap();
+        let reduced = r.reduce();
+        assert_eq!(*reduced.numerator(), BigInt::from(3));
+        assert_eq!(*reduced.denominator(), BigInt::from(2));
+    }
+
+    #[test]
+    fn reduce_integer_early_return() {
+        // denominator == 1 triggers the early-return path; value unchanged
+        let r = BoundedRational::from_long(7);
+        let reduced = r.reduce();
+        assert_eq!(*reduced.numerator(), BigInt::from(7));
+        assert_eq!(*reduced.denominator(), *ONE);
+    }
+
+    #[test]
+    fn reduce_already_lowest_terms_unchanged() {
+        let r = BoundedRational::from_longs(3, 7).unwrap();
+        let reduced = r.reduce();
+        assert_eq!(*reduced.numerator(), BigInt::from(3));
+        assert_eq!(*reduced.denominator(), BigInt::from(7));
+    }
+
+    #[test] 
+    fn reduce_negative_numerator() {
+        let r = BoundedRational::from_longs(-6, 4).unwrap();
+        let reduced = r.reduce();
+        assert_eq!(*reduced.numerator(), BigInt::from(-3));
+        assert_eq!(*reduced.denominator(), BigInt::from(2));
+    }
+
+    #[test]
+    fn reduce_large_common_factor() {
+        // 100/200 => 1/2
+        let r = BoundedRational::from_longs(100, 200).unwrap();
+        let reduced = r.reduce();
+        assert_eq!(*reduced.numerator(), BigInt::from(1));
+        assert_eq!(*reduced.denominator(), BigInt::from(2));
+    }
+
+    #[test]
+    fn reduce_is_idempotent() {
+        let r = BoundedRational::from_longs(6, 4).unwrap();
+        let once = r.reduce();
+        let twice = once.reduce();
+        assert_eq!(once.numerator(), twice.numerator());
+        assert_eq!(once.denominator(), twice.denominator());
+    }
+
+    #[test]
+    fn reduce_preserves_value() {
+        // cross-multiply: (6/4).num * reduced.den == (6/4).den * reduced.num
+        let r = BoundedRational::from_longs(6, 4).unwrap();
+        let reduced = r.reduce();
+        assert_eq!(r.numerator() * reduced.denominator(), r.denominator() * reduced.numerator());
+    }
+
+    // ── maybe_reduce ─────────────────────────────────────────────────────────
+
+    /// Accepptance criterion: maybe_reduce(None) returns None
+    #[test]
+    fn maybe_reduce_none_returns_none() {
+        assert!(BoundedRational::maybe_reduce(None).is_none());
+    }
+
+    #[test]
+    fn maybe_reduce_small_fraction_preserves_value() {
+        // Run many times to hit both the "skip" and "reduce" random paths.
+        for _ in 0..100 {
+            let r = BoundedRational::from_longs(6, 4).unwrap();
+            if let Some(result) = BoundedRational::maybe_reduce(Some(r)) {
+                // Value must still equal 1.5 regardless of which path was taken.
+                let num: f64 = result.numerator().to_string().parse().unwrap();
+                let den: f64 = result.denominator().to_string().parse().unwrap();
+                assert!(
+                    (num / den - 1.5).abs() < 1e-10,
+                    "Value changed: {}/{}",
+                    result.numerator(),
+                    result.denominator()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn maybe_reduce_too_big_returns_none() {
+        // Construct a fraction that is too_big() and cannot be reduced
+        // (coprime numerator and denominator both near MAX_SIZE/2 bits).
+        // We use two large primes-ish numbers (just odd numbers far from each other).
+        let half = MAX_SIZE as u64 / 2;
+        // Two odd numbers with no common factor: GCD will be 1, so reduce won't shrink them.
+        let num = big_with_bits(half + 1) | BigInt::from(1u32); // force odd
+        let den = big_with_bits(half) | BigInt::from(1u32);     // force odd (different value)
+        // Manually construct to skip zero-check (both are large positives)
+        let r = BoundedRational { numerator: num, denominator: den };
+        assert!(r.too_big(), "precondition: r must be too_big");
+        assert!(BoundedRational::maybe_reduce(Some(r)).is_none());
     }
 }
