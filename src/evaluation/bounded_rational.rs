@@ -166,7 +166,7 @@ impl BoundedRational {
     /// Denominator sign is **not** normalized here - call [`positive_den`]
     /// afterwards is a canonical positive denominator is required.
     ///
-    /// An early return fireswhen the denominator is already `1`, because an
+    /// An early return fires when the denominator is already `1`, because an
     /// integer needs no reduction.
     ///
     /// [`positive_den`]: BoundedRational::positive_den
@@ -190,9 +190,9 @@ impl BoundedRational {
     /// # Reduction policy
     /// Reduction (via [`reduce`] + [`positive_den`]) is performed when either:
     /// - the value is already [`too_big`], **or**
-    /// - a 1-in-16 random chance fies (to reduce GCD cost across many ops).
+    /// - a 1-in-16 random chance fires (to reduce GCD cost across many ops).
     ///
-    /// After reducing, if teh result is still [`too_big`], `None` is returned
+    /// After reducing, if the result is still [`too_big`], `None` is returned
     /// so the caller can fall back to constructive-real arithmetic.
     ///
     /// # None propagation
@@ -574,7 +574,7 @@ mod tests {
 
     // ── maybe_reduce ─────────────────────────────────────────────────────────
 
-    /// Accepptance criterion: maybe_reduce(None) returns None
+    /// Acceptance criterion: maybe_reduce(None) returns None
     #[test]
     fn maybe_reduce_none_returns_none() {
         assert!(BoundedRational::maybe_reduce(None).is_none());
