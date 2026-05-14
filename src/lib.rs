@@ -11,5 +11,3 @@
 /// Provides evaluation utilities for computing with real numbers
 /// using the Boehm representation.
 pub mod evaluation;
-
-
