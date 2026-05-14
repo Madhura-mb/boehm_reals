@@ -12,7 +12,4 @@
 /// using the Boehm representation.
 pub mod evaluation;
 
-/// This module exposes the building blocks for representing and working with
-/// constructive reals — numbers that can be computed to arbitrary precision
-/// on demand, rather than being stored as fixed-size floating point values.
-pub mod creals;
+
