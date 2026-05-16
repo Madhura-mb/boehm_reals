@@ -184,16 +184,18 @@ impl BoundedRational {
         }
     }
 
-    /// Return a possibly-reduced `BoundedRational`, or `None` if the value
-    /// is too large to represent usefully.
+    /// Return a possibly-reduced version of `r`, or `None` if `r` is `None`.
     ///
     /// # Reduction policy
     /// Reduction (via [`reduce`] + [`positive_den`]) is performed when either:
     /// - the value is already [`too_big`], **or**
     /// - a 1-in-16 random chance fires (to reduce GCD cost across many ops).
     ///
-    /// After reducing, if the result is still [`too_big`], `None` is returned
-    /// so the caller can fall back to constructive-real arithmetic.
+    /// If neither condition applies, `r` is returned unchanged.
+    /// 
+    /// The caller is responsible for checking whether the returned value is 
+    /// still [`too_big`] and acting accordingly (e.g falling back to 
+    /// constructive-real arithmetic).
     ///
     /// # None propagation
     /// `None` input -> `None` output immediately, with no reduction attempted.
@@ -210,9 +212,7 @@ impl BoundedRational {
             return Some(r);
         }
 
-        let result = r.positive_den().reduce();
-
-        if result.too_big() { None } else { Some(result) }
+        Some(r.positive_den().reduce())
     }
 }
 
