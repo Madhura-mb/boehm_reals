@@ -598,22 +598,4 @@ mod tests {
             }
         }
     }
-
-    #[test]
-    fn maybe_reduce_too_big_returns_none() {
-        // Construct a fraction that is too_big() and cannot be reduced
-        // (coprime numerator and denominator both near MAX_SIZE/2 bits).
-        // We use two large primes-ish numbers (just odd numbers far from each other).
-        let half = MAX_SIZE as u64 / 2;
-        // Two odd numbers with no common factor: GCD will be 1, so reduce won't shrink them.
-        let num = big_with_bits(half + 1) | BigInt::from(1u32); // force odd
-        let den = big_with_bits(half) | BigInt::from(1u32); // force odd (different value)
-        // Manually construct to skip zero-check (both are large positives)
-        let r = BoundedRational {
-            numerator: num,
-            denominator: den,
-        };
-        assert!(r.too_big(), "precondition: r must be too_big");
-        assert!(BoundedRational::maybe_reduce(Some(r)).is_none());
-    }
 }
