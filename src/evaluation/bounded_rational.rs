@@ -192,9 +192,9 @@ impl BoundedRational {
     /// - a 1-in-16 random chance fires (to reduce GCD cost across many ops).
     ///
     /// If neither condition applies, `r` is returned unchanged.
-    /// 
-    /// The caller is responsible for checking whether the returned value is 
-    /// still [`too_big`] and acting accordingly (e.g falling back to 
+    ///
+    /// The caller is responsible for checking whether the returned value is
+    /// still [`too_big`] and acting accordingly (e.g falling back to
     /// constructive-real arithmetic).
     ///
     /// # None propagation
