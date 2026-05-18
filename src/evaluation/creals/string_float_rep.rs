@@ -72,11 +72,9 @@ impl StringFloatRep {
     /// # Arguments
     ///
     /// * `sign`     — The sign of the number: `-1`, `0`, or `1`
-    /// * `mantissa` — The significant digits as a string; all characters must be valid
-    ///                digits for the given `radix`
+    /// * `mantissa` — The significant digits as a string; all characters must be valid digits for the given `radix`
     /// * `radix`    — The numeric base, must be in the range `2..=16`
-    /// * `exponent` — The power of `radix` used to scale the mantissa, expressed as a
-    ///                string in the same base as `radix`; a leading `-` is permitted
+    /// * `exponent` — The power of `radix` used to scale the mantissa, expressed as a string in the same base as `radix`; a leading `-` is permitted
     ///
     /// # Errors
     ///
