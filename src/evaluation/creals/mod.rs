@@ -5,4 +5,5 @@
 ///   mantissa, radix, and exponent as discrete fields.
 ///
 /// [`StringFloatRep`]: string_float_rep::StringFloatRep
-pub mod string_float_rep;
+mod string_float_rep;
+pub use string_float_rep::StringFloatRep;

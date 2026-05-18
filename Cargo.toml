@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 num-bigint = "0.4"
 once_cell = "1"
+radix_fmt = "1"
