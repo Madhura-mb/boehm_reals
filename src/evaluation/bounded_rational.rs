@@ -288,7 +288,7 @@ impl BoundedRational {
     pub fn value_of_double(x: f64) -> Result<BoundedRational, NonFiniteError> {
         // --- Fast path: small whole numbers reuse the integer constructor. ---
         let rounded = x.round();
-        if rounded as f64 == x && rounded.abs() <= 1000.0 {
+        if rounded == x && rounded.abs() <= 1000.0 {
             return Ok(BoundedRational::value_of_long(rounded as i64));
         }
 
