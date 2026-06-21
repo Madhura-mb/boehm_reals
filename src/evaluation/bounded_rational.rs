@@ -43,6 +43,22 @@ impl std::fmt::Display for ZeroDenominatorError {
 
 impl std::error::Error for ZeroDenominatorError {}
 
+/// Error returned when constructing a `BoundedRational` from a non-finite
+/// `f64` (`NaN` or infinite), neither of which has a finite rational value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NonFiniteError;
+
+impl std::fmt::Display for NonFiniteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "value is NaN or infinite; has no rational representation"
+        )
+    }
+}
+
+impl std::error::Error for NonFiniteError {}
+
 /// A ratio of two arbitrary-precision integers, `numerator/denominator`
 ///
 /// Arithmetic operations return `None` when the result would exceed
@@ -214,18 +230,140 @@ impl BoundedRational {
 
         Some(r.positive_den().reduce())
     }
+
+    ///Converts an `i64` into a `BoundedRational`.
+    ///
+    /// For the six most commonly encountered small integers (`-2`, `-1`, `0`, `1`, `2`, `10`),
+    /// this function constructs a fresh `BoundedRational` backed by the corresponding
+    /// pre-allocated [`BigInt`] constants (`MINUS_TWO`, `MINUS_ONE`, `ZERO`, `ONE`, `TWO`, `TEN`).
+    /// This avoids an extra [`BigInt::from`] allocation for those hot values.
+    ///
+    /// All other values are forwarded to [`BoundedRational::from_long`], which heap-allocates
+    /// a new [`BigInt`] for the numerator and uses `ONE` as the denominator.
+    ///
+    /// # Return value
+    /// Always returns a valid `BoundedRational` with denominator `1`. The result is
+    /// never reduced (no GCD is computed), because there is nothing to cancel against
+    /// a denominator of `1`.
+    ///
+    /// # Note on cloning
+    /// The cached [`BigInt`] statics are wrapped in [`once_cell::sync::Lazy`], so each
+    /// returned `BoundedRational` clones the inner [`BigInt`] value out of the static.
+    /// There is no way to return a reference to a static `BoundedRational` from a
+    /// function that returns `BoundedRational` by value without lifetime complications,
+    /// so cloning is the right trade-off here.
+    pub fn value_of_long(x: i64) -> BoundedRational {
+        match x {
+            -2 => BoundedRational::from_bigint(MINUS_TWO.clone()),
+            -1 => BoundedRational::from_bigint(MINUS_ONE.clone()),
+            0 => BoundedRational::from_bigint(ZERO.clone()),
+            1 => BoundedRational::from_bigint(ONE.clone()),
+            2 => BoundedRational::from_bigint(TWO.clone()),
+            10 => BoundedRational::from_bigint(TEN.clone()),
+            _ => BoundedRational::from_long(x),
+        }
+    }
+
+    /// Converts a given `f64` into `BoundedRatioanl`.
+    ///
+    /// # Fast path
+    /// If `x` is a small whole number (between -1000 and 1000),
+    /// it is converted using `value_of_long()`. This is a faster
+    /// method and avoids extra calculations.
+    ///
+    /// # Slow path
+    /// For all other finite `f64` values, the function extracts the
+    /// IEEE 754 binary representation of the number. It then separates
+    /// the sign, exponent, and mantissa, and uses them to construct the
+    /// exact numerator and denominator of the fraction.
+    ///
+    /// The returned fraction exactly represents the binary value
+    /// stored in the `f64`. It may not exactly match the decimal
+    /// number that was originally written (because many decimal
+    /// numbers cannot be represented exactly in binary). The
+    /// function does not reduce the fraction to its simplest form.
+    ///
+    /// # Errors
+    /// Returns `Err(NonFiniteError)` if `x` is `NaN` or infinite.
+    pub fn value_of_double(x: f64) -> Result<BoundedRational, NonFiniteError> {
+        // --- Fast path: small whole numbers reuse the integer constructor. ---
+        let rounded = x.round();
+        if rounded as f64 == x && rounded.abs() <= 1000.0 {
+            return Ok(BoundedRational::value_of_long(rounded as i64));
+        }
+
+        // --- Slow path: exact IEEE 754 decomposition. ---
+        let bits = x.abs().to_bits();
+
+        let mantissa_mask: u64 = (1u64 << 52) - 1;
+        let mut mantissa = bits & mantissa_mask;
+        let biased_exp = (bits >> 52) & 0x7ff;
+
+        // Reject Nan and Infinity.
+        if biased_exp == 0x7ff {
+            return Err(NonFiniteError);
+        }
+
+        let sign: i64 = if x < 0.0 { -1 } else { 1 };
+
+        // 1075 = 1023 (exponent bias) + 52 (mantissa fraction bits).
+        let mut exp = biased_exp as i64 - 1075;
+
+        if biased_exp == 0 {
+            // Subnormal: no hidden leading bit; exponent shifted by one.
+            exp += 1;
+        } else {
+            // Normalized: restore the hidden leading 1 bit.
+            mantissa |= 1u64 << 52;
+        }
+
+        // Mantissa is at most ~2^53, so sign * mantissa fits safely in i64.
+        let signed_mantissa = sign * mantissa as i64;
+
+        let (numerator, denominator) = if exp >= 0 {
+            (BigInt::from(signed_mantissa) << exp as usize, ONE.clone())
+        } else {
+            (
+                BigInt::from(signed_mantissa),
+                ONE.clone() << (-exp) as usize,
+            )
+        };
+
+        // denominator is always a positive power of two (non-zero) here, so this
+        // can never trigger the zero-denominator error from `new`.
+        Ok(BoundedRational::new(numerator, denominator)
+            .expect("denominator is a nonzero power of two by construction"))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use num_bigint::BigInt;
+    use std::i64;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /// Constructs a BigInt with exactly `n` bits set (value = 2^n - 1).
     fn big_with_bits(n: u64) -> BigInt {
         (BigInt::from(1) << n as usize) - BigInt::from(1)
+    }
+
+    // ── NonFiniteError display ─────────────────────────────────────────
+
+    #[test]
+    fn non_finite_error_display() {
+        assert_eq!(
+            NonFiniteError.to_string(),
+            "value is NaN or infinite; has no rational representation"
+        );
+    }
+
+    #[test]
+    fn non_finite_error_is_clone_and_eq() {
+        let e1 = NonFiniteError;
+        let e2 = e1.clone();
+        assert_eq!(e1, e2);
     }
 
     // ── ZeroDenominatorError display ─────────────────────────────────────────
@@ -597,5 +735,171 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── value_of_long ─────────────────────────────────────────────────────────
+
+    // Category 1: Cached constants (-2, -1, 0, 1, 2, 10)
+    #[test]
+    fn value_of_long_cached_constant_negative_two() {
+        let r = BoundedRational::value_of_long(-2);
+        assert_eq!(r.numerator(), &BigInt::from(-2));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_long_zcached_constant_zero() {
+        let r = BoundedRational::value_of_long(0);
+        assert_eq!(r.numerator(), &BigInt::from(0));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_long_cached_constant_ten() {
+        let r = BoundedRational::value_of_long(10);
+        assert_eq!(r.numerator(), &BigInt::from(10));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    // Category 2: In-range but not cached, the gap (3..=9)
+    #[test]
+    fn value_of_long_uncached_in_range_value_three() {
+        let r = BoundedRational::value_of_long(3);
+        assert_eq!(r.numerator(), &BigInt::from(3));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_long_uncached_in_range_value_nine() {
+        let r = BoundedRational::value_of_long(9);
+        assert_eq!(r.numerator(), &BigInt::from(9));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    // Category 3: Just outside the cached range (-3, 11)
+    #[test]
+    fn value_of_long_negative_three_returns_negative_three() {
+        let r = BoundedRational::value_of_long(-3);
+        assert_eq!(r.numerator(), &BigInt::from(-3));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_long_eleven_returns_eleven() {
+        let r = BoundedRational::value_of_long(11);
+        assert_eq!(r.numerator(), &BigInt::from(11));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    // Category 4: Extremes of i64
+    #[test]
+    fn value_of_long_i64_max_returns_i64() {
+        let r = BoundedRational::value_of_long(i64::MAX);
+        assert_eq!(r.numerator(), &BigInt::from(i64::MAX));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_long_i64_min_returns_i64() {
+        let r = BoundedRational::value_of_long(i64::MIN);
+        assert_eq!(r.numerator(), &BigInt::from(i64::MIN));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    // Category 5: Ordinary value far from any boundary
+    #[test]
+    fn value_of_long_negative_500_returns_negative_500() {
+        let r = BoundedRational::value_of_long(-500);
+        assert_eq!(r.numerator(), &BigInt::from(-500));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    // ── value_of_double ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn value_of_double_small_integer() {
+        let r = BoundedRational::value_of_double(42.0).unwrap();
+
+        assert_eq!(r.numerator(), &BigInt::from(42));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_double_fast_path_upper_boundary() {
+        let r = BoundedRational::value_of_double(1000.0).unwrap();
+
+        assert_eq!(r.numerator(), &BigInt::from(1000));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_double_fast_path_lower_boundary() {
+        let r = BoundedRational::value_of_double(-1000.0).unwrap();
+
+        assert_eq!(r.numerator(), &BigInt::from(-1000));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_double_large_integer() {
+        let r = BoundedRational::value_of_double(1001.0).unwrap().reduce();
+
+        assert_eq!(r.numerator(), &BigInt::from(1001));
+        assert_eq!(r.denominator(), &BigInt::from(1));
+    }
+
+    #[test]
+    fn value_of_double_fraction() {
+        let r = BoundedRational::value_of_double(0.5).unwrap().reduce();
+
+        assert_eq!(r.numerator(), &BigInt::from(1));
+        assert_eq!(r.denominator(), &BigInt::from(2));
+    }
+
+    #[test]
+    fn value_of_double_negative_fraction() {
+        let r = BoundedRational::value_of_double(-0.5).unwrap().reduce();
+
+        assert_eq!(r.numerator(), &BigInt::from(-1));
+        assert_eq!(r.denominator(), &BigInt::from(2));
+    }
+
+    #[test]
+    fn value_of_double_positive_infinity() {
+        assert!(BoundedRational::value_of_double(f64::INFINITY).is_err());
+    }
+
+    #[test]
+    fn value_of_double_negative_infinity() {
+        assert!(BoundedRational::value_of_double(f64::NEG_INFINITY).is_err());
+    }
+
+    #[test]
+    fn value_of_double_nan() {
+        assert!(BoundedRational::value_of_double(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn value_of_double_subnormal() {
+        let r = BoundedRational::value_of_double(f64::from_bits(1)).unwrap();
+
+        assert!(r.numerator() > &BigInt::from(0));
+        assert!(r.denominator() > &BigInt::from(0));
+    }
+
+    #[test]
+    fn value_of_double_smallest_normal() {
+        let r = BoundedRational::value_of_double(f64::MIN_POSITIVE).unwrap();
+
+        assert!(r.numerator() > &BigInt::from(0));
+        assert!(r.denominator() > &BigInt::from(0));
+    }
+
+    #[test]
+    fn value_of_double_large_power_of_two() {
+        let r = BoundedRational::value_of_double(2f64.powi(60)).unwrap();
+
+        assert_eq!(r.denominator(), &BigInt::from(1));
+        assert_eq!(r.numerator(), &(BigInt::from(1) << 60));
     }
 }
