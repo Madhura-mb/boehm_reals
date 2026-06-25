@@ -1,3 +1,5 @@
+use num_bigint::BigInt;
+
 /// Represents a number in scientific notation as an approximation of a constructive real.
 ///
 /// A constructive real is a number that can be computed to arbitrary precision.
@@ -44,10 +46,10 @@ pub struct StringFloatRep {
 
     /// The base of the numeric system used for both the mantissa and exponent.
     ///
-    /// Valid range is `2..=16`. For bases above 10, digits `a..f` (case-insensitive)
+    /// Valid range is `2..=16`. For bases above 10, digits `A..F`
     /// represent values 10 through 15, following standard hexadecimal convention.
     /// Bases above 16 are not supported as there is no established symbol convention
-    /// beyond `f` for base-16. The radix is appended in the [`Display`] output for
+    /// beyond `F` for base-16. The radix is appended in the [`Display`] output for
     /// non-decimal bases.
     ///
     /// [`Display`]: std::fmt::Display
@@ -151,8 +153,9 @@ impl std::fmt::Display for StringFloatRep {
     /// The separator between the mantissa and exponent is the lowercase `e` to
     /// avoid ambiguity with the hexadecimal digit `E`.
     ///
-    /// The output format is `[-]d.dddde<exponent>[(radix N)]`, where:
+    /// The output format is `[-]d[.ddd]e<exponent>[(radix N)]`, where:
     /// - the leading `-` only appears for negative values
+    /// - the fractional part is omitted when there are no remaining mantissa digits
     /// - the `(radix N)` suffix is omitted for base-10
     ///
     /// # Examples
@@ -160,9 +163,9 @@ impl std::fmt::Display for StringFloatRep {
     /// ```
     /// use boehm_reals::evaluation::creals::StringFloatRep;
     ///
-    /// // 0.5 × 10^1 = 5.0, displayed as "5.e0" (no fractional digits after the first)
+    /// // 0.5 × 10^1 = 5.0, displayed as "5e0"
     /// let rep = StringFloatRep::new(-1, "5".to_string(), 10, "1".to_string()).unwrap();
-    /// assert_eq!(rep.to_string(), "-5.e0");
+    /// assert_eq!(rep.to_string(), "-5e0");
     ///
     /// // 0.1011 × 2^1000 normalized: first digit before point, exponent decremented by 1
     /// // exponent "1000" in base 2 = 8 in decimal, decremented to 7 = "111" in base 2
@@ -179,13 +182,19 @@ impl std::fmt::Display for StringFloatRep {
         let rest = &self.mantissa[1..];
         let adjusted_exponent = self.compute_adjusted_exponent();
 
+        let normalize = if rest.is_empty() {
+            first.to_string()
+        } else {
+            format!("{}.{}", first, rest)
+        };
+
         if self.radix == 10 {
-            write!(f, "{}{}.{}e{}", sign_str, first, rest, adjusted_exponent)
+            write!(f, "{}{}e{}", sign_str, normalize, adjusted_exponent)
         } else {
             write!(
                 f,
-                "{}{}.{}e{}(radix {})",
-                sign_str, first, rest, adjusted_exponent, self.radix
+                "{}{}e{}(radix {})",
+                sign_str, normalize, adjusted_exponent, self.radix
             )
         }
     }
@@ -196,8 +205,8 @@ impl StringFloatRep {
     /// one-place rightward shift of the decimal point during display normalization.
     ///
     /// The exponent is stored as a string in `self.radix`. To adjust it, we parse
-    /// it into a `i64` using the radix, subtract 1, then reformat it back into a
-    /// string in the same radix.
+    /// it into an integer, subtract 1, then reformat it back into a
+    /// string in the same radix using `BigInt::to_str_radix`.
     ///
     /// # Panics
     ///
@@ -206,8 +215,9 @@ impl StringFloatRep {
     fn compute_adjusted_exponent(&self) -> String {
         let value = i64::from_str_radix(&self.exponent, self.radix as u32)
             .expect("exponent was validated at construction and must be parseable");
-        let adjusted = value - 1;
+
+        let adjusted = BigInt::from(value - 1);
         // Reformat back into the original radix.
-        radix_fmt::radix(adjusted, self.radix).to_string()
+        adjusted.to_str_radix(self.radix as u32)
     }
 }
