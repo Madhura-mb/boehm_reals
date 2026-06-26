@@ -264,31 +264,37 @@ impl BoundedRational {
         }
     }
 
-    /// Converts a given `f64` into `BoundedRatioanl`.
+    /// Converts a given `f64` into `BoundedRational`.
     ///
     /// # Fast path
-    /// If `x` is a small whole number (between -1000 and 1000),
-    /// it is converted using `value_of_long()`. This is a faster
-    /// method and avoids extra calculations.
+    /// If `x` is a finite whole number that fits within the `i64` range,
+    /// it is converted using `value_of_long()`. This avoids the overhead
+    /// of decomposing the IEEE 754 representation.
     ///
     /// # Slow path
-    /// For all other finite `f64` values, the function extracts the
-    /// IEEE 754 binary representation of the number. It then separates
-    /// the sign, exponent, and mantissa, and uses them to construct the
-    /// exact numerator and denominator of the fraction.
+    /// All other finite `f64` values, including non-integer values and
+    /// whole numbers outside the `i64` range, are converted by extracting
+    /// the IEEE 754 binary representation. The sign, exponent, and
+    /// mantissa are used to construct the exact numerator and denominator
+    /// of the fraction.
     ///
-    /// The returned fraction exactly represents the binary value
-    /// stored in the `f64`. It may not exactly match the decimal
-    /// number that was originally written (because many decimal
-    /// numbers cannot be represented exactly in binary). The
-    /// function does not reduce the fraction to its simplest form.
+    /// The returned fraction exactly represents the binary value stored
+    /// in the `f64`. It may not exactly match the decimal number that was
+    /// originally written (because many decimal numbers cannot be
+    /// represented exactly in binary). The function does not reduce the
+    /// fraction to its simplest form.
     ///
     /// # Errors
     /// Returns `Err(NonFiniteError)` if `x` is `NaN` or infinite.
     pub fn value_of_double(x: f64) -> Result<BoundedRational, NonFiniteError> {
-        // --- Fast path: small whole numbers reuse the integer constructor. ---
+        // Reject NaN and infinity.
+        if !x.is_finite() {
+            return Err(NonFiniteError);
+        }
+
+        // --- Fast path: whole numbers reuse the integer constructor. ---
         let rounded = x.round();
-        if rounded == x && rounded.abs() <= 1000.0 {
+        if rounded == x && rounded >= i64::MIN as f64 && rounded <= i64::MAX as f64 {
             return Ok(BoundedRational::value_of_long(rounded as i64));
         }
 
@@ -298,11 +304,6 @@ impl BoundedRational {
         let mantissa_mask: u64 = (1u64 << 52) - 1;
         let mut mantissa = bits & mantissa_mask;
         let biased_exp = (bits >> 52) & 0x7ff;
-
-        // Reject Nan and Infinity.
-        if biased_exp == 0x7ff {
-            return Err(NonFiniteError);
-        }
 
         let sign: i64 = if x < 0.0 { -1 } else { 1 };
 
@@ -825,24 +826,8 @@ mod tests {
     }
 
     #[test]
-    fn value_of_double_fast_path_upper_boundary() {
-        let r = BoundedRational::value_of_double(1000.0).unwrap();
-
-        assert_eq!(r.numerator(), &BigInt::from(1000));
-        assert_eq!(r.denominator(), &BigInt::from(1));
-    }
-
-    #[test]
-    fn value_of_double_fast_path_lower_boundary() {
-        let r = BoundedRational::value_of_double(-1000.0).unwrap();
-
-        assert_eq!(r.numerator(), &BigInt::from(-1000));
-        assert_eq!(r.denominator(), &BigInt::from(1));
-    }
-
-    #[test]
     fn value_of_double_large_integer() {
-        let r = BoundedRational::value_of_double(1001.0).unwrap().reduce();
+        let r = BoundedRational::value_of_double(1001.0).unwrap();
 
         assert_eq!(r.numerator(), &BigInt::from(1001));
         assert_eq!(r.denominator(), &BigInt::from(1));
@@ -901,5 +886,29 @@ mod tests {
 
         assert_eq!(r.denominator(), &BigInt::from(1));
         assert_eq!(r.numerator(), &(BigInt::from(1) << 60));
+    }
+
+    #[test]
+    fn value_of_double_large_fraction() {
+        let r = BoundedRational::value_of_double(1024.5).unwrap().reduce();
+
+        assert_eq!(r.numerator(), &BigInt::from(2049));
+        assert_eq!(r.denominator(), &BigInt::from(2));
+    }
+
+    #[test]
+    fn value_of_double_i64_max() {
+        let r = BoundedRational::value_of_double(i64::MAX as f64).unwrap();
+
+        assert_eq!(r.denominator(), &BigInt::from(1));
+        assert_eq!(r.numerator(), &BigInt::from(i64::MAX));
+    }
+
+    #[test]
+    fn value_of_double_below_i64_min_uses_slow_path() {
+        let r = BoundedRational::value_of_double(-1e100).unwrap();
+
+        assert_eq!(r.denominator(), &BigInt::from(1));
+        assert_ne!(r.numerator(), &BigInt::from(i64::MIN));
     }
 }
