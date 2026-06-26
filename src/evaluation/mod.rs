@@ -6,3 +6,8 @@
 /// [`bounded_rational::MAX_SIZE`], at which point the caller is expected
 /// to fall back to constructive-real (`CR`) approximation.
 pub mod bounded_rational;
+
+/// This module exposes the building blocks for representing and working with
+/// constructive reals — numbers that can be computed to arbitrary precision
+/// on demand, rather than being stored as fixed-size floating point values.
+pub mod creals;
