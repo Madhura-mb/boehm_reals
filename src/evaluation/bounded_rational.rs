@@ -335,6 +335,42 @@ impl BoundedRational {
         Ok(BoundedRational::new(numerator, denominator)
             .expect("denominator is a nonzero power of two by construction"))
     }
+
+    /// Returns the argument, but with the opposite sign.
+    /// Returns `None` only for a `None` argument.
+    pub fn negate(r: Option<BoundedRational>) -> Option<BoundedRational> {
+        let r = r?; // propagate None immediately
+        Some(BoundedRational {
+            numerator: -r.numerator,
+            denominator: r.denominator,
+        })
+    }
+
+    /// Returns the sum of `r1` and `r2`, possibly reduces.
+    /// Returns `None` if either argument is `None`.
+    pub fn add(
+        r1: Option<BoundedRational>,
+        r2: Option<BoundedRational>,
+    ) -> Option<BoundedRational> {
+        let r1 = r1?; // propagate None immediately
+        let r2 = r2?; // propagate None immediately
+
+        let den = &r1.denominator * &r2.denominator;
+        let num = &r1.numerator * &r2.denominator + &r1.denominator * &r2.numerator;
+
+        BoundedRational::maybe_reduce(Some(BoundedRational {
+            numerator: num,
+            denominator: den,
+        }))
+    }
+
+    /// Returns `r1 - r2`. Returns `None` if either argument is `None`.
+    pub fn subtract(
+        r1: Option<BoundedRational>,
+        r2: Option<BoundedRational>,
+    ) -> Option<BoundedRational> {
+        BoundedRational::add(r1, BoundedRational::negate(r2))
+    }
 }
 
 #[cfg(test)]
@@ -910,5 +946,106 @@ mod tests {
 
         assert_eq!(r.denominator(), &BigInt::from(1));
         assert_ne!(r.numerator(), &BigInt::from(i64::MIN));
+    }
+
+    // ── negate ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn negate_none() {
+        assert!(BoundedRational::negate(None).is_none());
+    }
+
+    #[test]
+    fn negate_positive_fraction() {
+        let r = BoundedRational::from_longs(3, 4).unwrap();
+        let neg = BoundedRational::negate(Some(r)).unwrap();
+
+        assert_eq!(neg.numerator(), &BigInt::from(-3));
+        assert_eq!(neg.denominator(), &BigInt::from(4));
+    }
+
+    #[test]
+    fn negate_negative_fraction() {
+        let r = BoundedRational::from_longs(-5, 10).unwrap();
+        let neg = BoundedRational::negate(Some(r)).unwrap();
+
+        assert_eq!(neg.numerator(), &BigInt::from(5));
+        assert_eq!(neg.denominator(), &BigInt::from(10));
+    }
+
+    // ── add ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn add_none_both() {
+        assert!(BoundedRational::add(None, None).is_none());
+    }
+
+    #[test]
+    fn add_basic_fractions() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(1, 3).unwrap();
+        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+
+        assert_eq!(sum.numerator(), &BigInt::from(5));
+        assert_eq!(sum.denominator(), &BigInt::from(6));
+    }
+
+    #[test]
+    fn add_same_denominator_reduces() {
+        let r1 = BoundedRational::from_longs(1, 4).unwrap();
+        let r2 = BoundedRational::from_longs(1, 4).unwrap();
+        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+
+        assert_eq!(sum.numerator(), &BigInt::from(1));
+        assert_eq!(sum.denominator(), &BigInt::from(2));
+    }
+
+    #[test]
+    fn add_with_negative_denominator() {
+        let r1 = BoundedRational::from_longs(1, -2).unwrap();
+        let r2 = BoundedRational::from_longs(1, 3).unwrap();
+        let sum = BoundedRational::add(Some(r1), Some(r2))
+            .unwrap()
+            .positive_den()
+            .reduce();
+
+        assert_eq!(sum.numerator(), &BigInt::from(-1));
+        assert_eq!(sum.denominator(), &BigInt::from(6));
+    }
+
+    // ── subtract ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn subtract_none_r1() {
+        let r2 = BoundedRational::from_long(1);
+        assert!(BoundedRational::subtract(None, Some(r2)).is_none());
+    }
+
+    #[test]
+    fn subtract_from_zero() {
+        let r1 = BoundedRational::from_long(0);
+        let r2 = BoundedRational::from_longs(1, 2).unwrap();
+        let diff = BoundedRational::subtract(Some(r1), Some(r2)).unwrap();
+
+        assert_eq!(diff.numerator(), &BigInt::from(-1));
+        assert_eq!(diff.denominator(), &BigInt::from(2));
+    }
+
+    #[test]
+    fn subtract_matches_add_of_negation() {
+        // Cross-check: subtract(r1, r2) should equal add(r1, negate(r2)) exactly,
+        // since that's how subtract is implemented.
+        let r1 = BoundedRational::from_longs(7, 9).unwrap();
+        let r2 = BoundedRational::from_longs(2, 5).unwrap();
+
+        let via_subtract = BoundedRational::subtract(Some(r1.clone()), Some(r2.clone()))
+            .unwrap()
+            .reduce();
+        let via_add_negate = BoundedRational::add(Some(r1), BoundedRational::negate(Some(r2)))
+            .unwrap()
+            .reduce();
+
+        assert_eq!(via_subtract.numerator(), via_add_negate.numerator());
+        assert_eq!(via_subtract.denominator(), via_add_negate.denominator());
     }
 }
