@@ -348,12 +348,33 @@ impl BoundedRational {
 
     /// Returns the sum of `r1` and `r2`, possibly reduces.
     /// Returns `None` if either argument is `None`.
+    ///
+    /// Before performing the addition, this function may reduce both operands
+    /// when their combined bit size is large. This heuristic helps avoid
+    /// creating unnecessarily large intermediate numerators and denominators
+    /// during cross multiplication while preserving the final value.
+    ///
+    /// The resulting fraction is passed through [`maybe_reduce`] to keep its
+    /// size within the configured bounds when possible.
     pub fn add(
         r1: Option<BoundedRational>,
         r2: Option<BoundedRational>,
     ) -> Option<BoundedRational> {
         let r1 = r1?; // propagate None immediately
         let r2 = r2?; // propagate None immediately
+        // Heuristic: if sum of input bit sizes is already close to MAX_SIZE,
+        // reduce inputs first to avoid huge intermediates
+        let input_bits = r1.numerator.bits()
+            + r1.denominator.bits()
+            + r2.numerator.bits()
+            + r2.denominator.bits();
+
+        let (r1, r2) = if input_bits > (MAX_SIZE as u64 * 3 / 4) {
+            // Reduce both inputs before multiplying
+            (r1.reduce().positive_den(), r2.reduce().positive_den())
+        } else {
+            (r1, r2)
+        };
 
         let den = &r1.denominator * &r2.denominator;
         let num = &r1.numerator * &r2.denominator + &r1.denominator * &r2.numerator;
@@ -1001,6 +1022,16 @@ mod tests {
     }
 
     #[test]
+    fn add_different_denominator_reduces() {
+        let r1 = BoundedRational::from_longs(1, 3).unwrap();
+        let r2 = BoundedRational::from_longs(1, 6).unwrap();
+        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+
+        assert_eq!(sum.numerator(), &BigInt::from(1));
+        assert_eq!(sum.denominator(), &BigInt::from(2));
+    }
+
+    #[test]
     fn add_with_negative_denominator() {
         let r1 = BoundedRational::from_longs(1, -2).unwrap();
         let r2 = BoundedRational::from_longs(1, 3).unwrap();
@@ -1011,6 +1042,19 @@ mod tests {
 
         assert_eq!(sum.numerator(), &BigInt::from(-1));
         assert_eq!(sum.denominator(), &BigInt::from(6));
+    }
+
+    #[test]
+    fn add_large_reducible_inputs_uses_reduction_heuristic() {
+        // Construct two very large but easily reducible fractions.
+        let factor = BigInt::from(1u32) << (MAX_SIZE / 2);
+
+        let r1 = BoundedRational::new(factor.clone() * 2u32, factor.clone()).unwrap();
+        let r2 = BoundedRational::new(factor.clone() * 3u32, factor).unwrap();
+        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+
+        assert_eq!(sum.numerator(), &BigInt::from(5));
+        assert_eq!(sum.denominator(), &BigInt::from(1));
     }
 
     // ── subtract ────────────────────────────────────────────────────────────────
