@@ -393,44 +393,106 @@ impl BoundedRational {
         BoundedRational::add(r1, BoundedRational::negate(r2))
     }
 
-    /// Returns the product of `r1` and `r2` without reducing the result.
+    /// Returns the product of `r1` and `r2` , possibly reduced.
     ///
     /// # Shortcuts
-    /// If either argument is equal to the multiplicative identity (`1`),
-    /// the other argument is returned unchanged (cloned), skipping the
-    /// multiplication entirely.
+    /// - If either argument is `1` (numerator and denominator both `1`), the other
+    ///   argument is returned immediately, skipping multiplication entirely.
+    /// - If either argument is `-1/1` or `1/-1`, the other argument is returned
+    ///   with its numerator negated, skipping multiplication entirely.
+    /// - If either argument is `-1/-1`, it is equal to `1`, so the other argument
+    ///   is returned unchanged.
+    ///
+    /// # Reduction heuristic
+    /// Before multiplying, the combined bit sizes of all four components are
+    /// checked against a threshold of `MAX_SIZE * 3/4`. The result numerator
+    /// and denominator bit sizes are also checked independently, since either
+    /// can overflow even when the total input size looks acceptable:
+    /// - `input_bits  = r1.num.bits + r1.den.bits + r2.num.bits + r2.den.bits`
+    /// - `result_num_bits = r1.num.bits + r2.num.bits`
+    /// - `result_den_bits = r1.den.bits + r2.den.bits`
+    ///
+    /// If any of these exceed the threshold, both `r1` and `r2` are reduced and
+    /// sign-normalised before the multiplication, keeping intermediate values
+    /// small. When this pre-reduction fires, the `maybe_reduce` step afterwards
+    /// is skipped, since a second reduction pass would be redundant. When the
+    /// threshold is not exceeded, `maybe_reduce` is called on the raw product
+    /// as usual.
     ///
     /// # None propagation
     /// `None` input on either side -> `None` output immediately. A `None`
     /// here may represent a value that was too large to keep as an exact
     /// rational, so it is never silently treated as zero or one.
-    pub fn raw_multiply(
+    pub fn multiply(
         r1: Option<BoundedRational>,
         r2: Option<BoundedRational>,
     ) -> Option<BoundedRational> {
         let r1 = r1?; // propagate None immediately
         let r2 = r2?; // propagate None immediately
+
+        // r1 == 1
         if r1.numerator == *ONE && r1.denominator == *ONE {
             return Some(r2);
         }
+        // r2 == 1
         if r2.numerator == *ONE && r2.denominator == *ONE {
             return Some(r1);
         }
-        let num = &r1.numerator * &r2.numerator;
-        let den = &r1.denominator * &r2.denominator;
-        Some(BoundedRational {
-            numerator: num,
-            denominator: den,
-        })
-    }
+        // r1 == -1/-1 == 1
+        if r1.numerator == *MINUS_ONE && r1.denominator == *MINUS_ONE {
+            return Some(r2);
+        }
+        // r2 == -1/-1 == 1
+        if r2.numerator == *MINUS_ONE && r2.denominator == *MINUS_ONE {
+            return Some(r1);
+        }
+        // r1 == -1 in either sign representation
+        if r1.numerator == *MINUS_ONE && r1.denominator == *ONE
+            || r1.numerator == *ONE && r1.denominator == *MINUS_ONE
+        {
+            return Some(BoundedRational {
+                numerator: -r2.numerator,
+                denominator: r2.denominator,
+            });
+        }
+        // r2 == -1 in either sign representation
+        if r2.numerator == *MINUS_ONE && r2.denominator == *ONE
+            || r2.numerator == *ONE && r2.denominator == *MINUS_ONE
+        {
+            return Some(BoundedRational {
+                numerator: -r1.numerator,
+                denominator: r1.denominator,
+            });
+        }
 
-    /// Returns the product of `r1` and `r2`, possibly reduces.
-    /// Returns `None` if either argument is `None`.
-    pub fn multiply(
-        r1: Option<BoundedRational>,
-        r2: Option<BoundedRational>,
-    ) -> Option<BoundedRational> {
-        BoundedRational::maybe_reduce(BoundedRational::raw_multiply(r1, r2))
+        let threshold = MAX_SIZE as u64 * 3 / 4;
+
+        let input_bits = r1.numerator.bits()
+            + r1.denominator.bits()
+            + r2.numerator.bits()
+            + r2.denominator.bits();
+
+        let result_num_bits = r1.numerator.bits() + r2.numerator.bits();
+        let result_den_bits = r1.denominator.bits() + r2.denominator.bits();
+
+        let (r1, r2, already_reduced) =
+            if input_bits > threshold || result_num_bits > threshold || result_den_bits > threshold
+            {
+                (r1.reduce().positive_den(), r2.reduce().positive_den(), true)
+            } else {
+                (r1, r2, false)
+            };
+
+        let result = Some(BoundedRational {
+            numerator: &r1.numerator * &r2.numerator,
+            denominator: &r1.denominator * &r2.denominator,
+        });
+
+        if already_reduced {
+            result
+        } else {
+            BoundedRational::maybe_reduce(result)
+        }
     }
 
     /// Returns the reciprocal of `r`, formed by swapping numerator and
@@ -1170,35 +1232,36 @@ mod tests {
         assert_eq!(via_subtract.denominator(), via_add_negate.denominator());
     }
 
-    // ── raw_multiply ─────────────────────────────────────────────────────────────
+    // ── multiply ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn raw_multiply_basic() {
+    fn multiply_basic() {
         let r1 = BoundedRational::from_longs(2, 3).unwrap();
         let r2 = BoundedRational::from_longs(3, 4).unwrap();
-        let prod = BoundedRational::raw_multiply(Some(r1), Some(r2)).unwrap();
-        // unreduced: (2*3)/(3*4) = 6/12
-        assert_eq!(prod.numerator(), &BigInt::from(6));
-        assert_eq!(prod.denominator(), &BigInt::from(12));
+        let prod = BoundedRational::multiply(Some(r1), Some(r2))
+            .unwrap()
+            .reduce()
+            .positive_den();
+        // unreduced: (2*3)/(3*4) = 6/12 = 1/2
+        assert_eq!(prod.numerator(), &BigInt::from(1));
+        assert_eq!(prod.denominator(), &BigInt::from(2));
     }
 
     #[test]
-    fn raw_multiply_one_shortcut_right() {
+    fn multiply_one_shortcut_right() {
         let r1 = BoundedRational::from_longs(5, 7).unwrap();
         let one = BoundedRational::value_of_long(1);
-        let prod = BoundedRational::raw_multiply(Some(r1), Some(one)).unwrap();
+        let prod = BoundedRational::multiply(Some(r1), Some(one)).unwrap();
         assert_eq!(prod.numerator(), &BigInt::from(5));
         assert_eq!(prod.denominator(), &BigInt::from(7));
     }
 
     #[test]
-    fn raw_multiply_none_propagates_left() {
+    fn multiply_none_propagates_left() {
         let r2 = BoundedRational::from_longs(3, 4).unwrap();
-        let prod = BoundedRational::raw_multiply(None, Some(r2));
+        let prod = BoundedRational::multiply(None, Some(r2));
         assert!(prod.is_none());
     }
-
-    // ── multiply ────────────────────────────────────────────────────────────────
 
     #[test]
     fn multiply_by_zero() {
@@ -1217,6 +1280,19 @@ mod tests {
             .reduce()
             .positive_den();
         assert_eq!(prod.numerator(), &BigInt::from(1));
+        assert_eq!(prod.denominator(), &BigInt::from(2));
+    }
+
+    #[test]
+    fn multiply_negative_values() {
+        let r1 = BoundedRational::from_longs(-2, 3).unwrap();
+        let r2 = BoundedRational::from_longs(3, 4).unwrap();
+        let prod = BoundedRational::multiply(Some(r1), Some(r2))
+            .unwrap()
+            .reduce()
+            .positive_den();
+        // (-2/3) * (3/4) = -6/12 = -1/2
+        assert_eq!(prod.numerator(), &BigInt::from(-1));
         assert_eq!(prod.denominator(), &BigInt::from(2));
     }
 
