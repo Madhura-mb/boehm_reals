@@ -7,6 +7,11 @@
 /// to fall back to constructive-real (`CR`) approximation.
 pub mod bounded_rational;
 
+/// This module defines commonly used `BigInt` values and size limits that
+/// are shared across the project. Keeping them here avoids duplicate
+/// definitions and repeated object creation.
+pub mod constants;
+
 /// This module exposes the building blocks for representing and working with
 /// constructive reals — numbers that can be computed to arbitrary precision
 /// on demand, rather than being stored as fixed-size floating point values.
