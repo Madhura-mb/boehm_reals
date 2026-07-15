@@ -383,8 +383,8 @@ impl BoundedRational {
     /// representations without needing to reduce first. For example, both
     /// `1/1` and `-1/-1` satisfy `numerator == 1 * denominator`, and both
     /// `-1/1` and `1/-1` satisfy `numerator == -1 * denominator`.
-    pub fn equals(&self, n: i64) -> bool {
-        self.numerator == BigInt::from(n) * &self.denominator
+    pub fn equals(&self, n: &BigInt) -> bool {
+        self.numerator == n * &self.denominator
     }
 
     /// Returns the product of `r1` and `r2` , possibly reduced.
@@ -425,19 +425,19 @@ impl BoundedRational {
         let r1 = r1?; // propagate None immediately
         let r2 = r2?; // propagate None immediately
 
-        if r1.equals(1) {
+        if r1.equals(&ONE) {
             return Some(r2);
         }
-        if r2.equals(1) {
+        if r2.equals(&ONE) {
             return Some(r1);
         }
-        if r1.equals(-1) {
+        if r1.equals(&MINUS_ONE) {
             return Some(BoundedRational {
                 numerator: -r2.numerator,
                 denominator: r2.denominator,
             });
         }
-        if r2.equals(-1) {
+        if r2.equals(&MINUS_ONE) {
             return Some(BoundedRational {
                 numerator: -r1.numerator,
                 denominator: r1.denominator,
