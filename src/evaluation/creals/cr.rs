@@ -1,20 +1,6 @@
+use crate::evaluation::constants::{ONE, ZERO};
 use num_bigint::BigInt;
-use once_cell::sync::Lazy;
 use std::sync::Mutex;
-
-/// The constant `0`, built once and shared across every constructive-real
-/// combinator in this crate.
-///
-/// `BigInt` values are heap-allocated, so calling `BigInt::from(0)` at
-/// every call site that needs a zero repeats that allocation needlessly.
-/// A `Lazy<BigInt>` builds the value exactly once, on first access, and
-/// every later use just clones that cached value instead of constructing
-/// a fresh one.
-pub static ZERO: Lazy<BigInt> = Lazy::new(|| BigInt::from(0i32));
-
-/// The constant `1`. See [`ZERO`] for why this is a `Lazy` static rather
-/// than calling `BigInt::from(1)` wherever it's needed.
-pub static ONE: Lazy<BigInt> = Lazy::new(|| BigInt::from(1i32));
 
 /// Errors that can occur while evaluating a constructive real.
 ///
