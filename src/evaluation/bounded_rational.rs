@@ -1,4 +1,5 @@
 use crate::evaluation::constants::{MAX_SIZE, MINUS_ONE, MINUS_TWO, ONE, TEN, TWO, ZERO};
+use crate::evaluation::errors::ZeroDivisionError;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use rand::Rng;
@@ -14,18 +15,6 @@ impl std::fmt::Display for ZeroDenominatorError {
 }
 
 impl std::error::Error for ZeroDenominatorError {}
-
-/// Error returned when an operation tries to divide by zero.
-#[derive(Clone, Debug)]
-pub struct ZeroDivisionError;
-
-impl std::fmt::Display for ZeroDivisionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "division by zero")
-    }
-}
-
-impl std::error::Error for ZeroDivisionError {}
 
 /// Converts a `ZeroDenominatorError` into a `ZeroDivisionError`.
 ///

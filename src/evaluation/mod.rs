@@ -16,3 +16,6 @@ pub mod constants;
 /// constructive reals — numbers that can be computed to arbitrary precision
 /// on demand, rather than being stored as fixed-size floating point values.
 pub mod creals;
+
+/// This module includes the errors commonly used accrosed the crate.
+pub mod errors;
