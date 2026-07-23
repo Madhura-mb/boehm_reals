@@ -1,7 +1,9 @@
 use crate::evaluation::constants::{MAX_SIZE, MINUS_ONE, MINUS_TWO, ONE, TEN, TWO, ZERO};
-use num_bigint::BigInt;
+use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use rand::Rng;
+use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
 
 /// Error returned when a `BoundedRational` is constructed with a zero denominator.
 #[derive(Clone, Debug)]
@@ -30,6 +32,15 @@ impl std::fmt::Display for NonFiniteError {
 
 impl std::error::Error for NonFiniteError {}
 
+/// Returns -1, 0, or 1 depending on whether `x` is negative, zero, or positive.
+fn signum_bigint(x: &BigInt) -> i32 {
+    match x.sign() {
+        Sign::Minus => -1,
+        Sign::NoSign => 0,
+        Sign::Plus => 1,
+    }
+}
+
 /// A ratio of two arbitrary-precision integers, `numerator/denominator`
 ///
 /// Arithmetic operations return `None` when the result would exceed
@@ -43,7 +54,7 @@ impl std::error::Error for NonFiniteError {}
 ///   occasionally at random to avoid paying the cost of GCD on every
 ///   operation.
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct BoundedRational {
     /// The top half of the fraction.
     numerator: BigInt,
@@ -510,12 +521,92 @@ impl BoundedRational {
     ) -> Result<Option<BoundedRational>, ZeroDenominatorError> {
         Ok(BoundedRational::multiply(r1, BoundedRational::inverse(r2)?))
     }
+
+    /// Returns the sign of this rational: `-1` if negative, `0` if zero, `1` if positive.
+    ///
+    /// A fraction's sign is the sign of the numerator times the sign of the
+    /// denominator. So `-3/4` and `3/-4` both correctly report `-1`.
+    pub fn signum(&self) -> i32 {
+        signum_bigint(&self.numerator) * signum_bigint(&self.denominator)
+    }
+
+    /// Compares `r1` to `r2`, the way you'd compare two fractions by hand.
+    ///
+    /// # How it works
+    /// 1. First it checks the signs. If one number is negative and the other
+    ///    is positive (or zero), we already know the answer and can skip the
+    ///    expensive math entirely.
+    /// 2. If the signs match, it cross-multiplies: `a/b` vs `c/d` becomes
+    ///    comparing `a*d` vs `c*b`. This avoids doing any division.
+    /// 3. Because a denominator can technically be stored as negative, the
+    ///    result of the cross-multiplication is flipped if one of the two
+    ///    denominators is negative.
+    pub fn compare_to(&self, other: &Self) -> Ordering {
+        let sign1 = self.signum();
+        let sign2 = other.signum();
+        if sign1 != sign2 {
+            return sign1.cmp(&sign2);
+        }
+
+        let lhs = &self.numerator * &other.denominator;
+        let rhs = &other.numerator * &self.denominator;
+        let cross = lhs.cmp(&rhs);
+
+        let den_sign_product = signum_bigint(&self.denominator) * signum_bigint(&other.denominator);
+        if den_sign_product < 0 {
+            cross.reverse()
+        } else {
+            cross
+        }
+    }
+
+    /// Compares `r` to the value `1`. Cheaper than `compare_to(&ONE)`
+    /// since it skips a multiplication.
+    pub fn compare_to_one(&self) -> Ordering {
+        let cmp = self.numerator.cmp(&self.denominator);
+        if signum_bigint(&self.denominator) < 0 {
+            cmp.reverse()
+        } else {
+            cmp
+        }
+    }
+}
+
+impl PartialEq for BoundedRational {
+    /// Two rationals are equal if they represent the same value, even if
+    /// they're stored with different numerators/denominators (e.g. `1/2`
+    /// and `2/4`).
+    fn eq(&self, other: &Self) -> bool {
+        self.compare_to(other) == Ordering::Equal
+    }
+}
+
+/// `BoundedRational` never contains NaN-like values, so equality is total.
+impl Eq for BoundedRational {}
+
+impl Hash for BoundedRational {
+    /// Hashes this rational so that equal values always produce equal hashes.
+    ///
+    /// `1/2` and `2/4` are `==` to each other, so they must hash the same
+    /// way too, or things like `HashSet`/`HashMap` break. To guarantee that,
+    /// we first reduce the fraction to lowest terms and make the denominator
+    /// positive, so every value that compares equal ends up with an
+    /// identical numerator/denominator pair before hashing.
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let reduced = self.reduce().positive_den();
+        reduced.numerator.hash(state);
+        reduced.denominator.hash(state);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use num_bigint::BigInt;
+    use std::cmp::Ordering;
+    use std::collections::HashSet;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
     use std::i64;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -1346,5 +1437,201 @@ mod tests {
         let r2 = BoundedRational::from_long(0);
         let result = BoundedRational::divide(Some(r1), Some(r2));
         assert!(result.is_err());
+    }
+
+    // ── signum ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn signum_positive() {
+        let r = BoundedRational::from_longs(3, 4).unwrap();
+        assert_eq!(r.signum(), 1);
+    }
+
+    #[test]
+    fn signum_negative_numerator() {
+        let r = BoundedRational::from_longs(-3, 4).unwrap();
+        assert_eq!(r.signum(), -1);
+    }
+
+    #[test]
+    fn signum_negative_denominator() {
+        let r = BoundedRational::from_longs(3, -4).unwrap();
+        assert_eq!(r.signum(), -1);
+    }
+
+    #[test]
+    fn signum_both_negative_is_positive() {
+        let r = BoundedRational::from_longs(-3, -4).unwrap();
+        assert_eq!(r.signum(), 1);
+    }
+
+    #[test]
+    fn signum_zero() {
+        let r = BoundedRational::from_longs(0, 5).unwrap();
+        assert_eq!(r.signum(), 0);
+    }
+
+    // ── compare_to ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn compare_to_equal_values() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(2, 4).unwrap();
+        assert_eq!(r1.compare_to(&r2), Ordering::Equal);
+    }
+
+    #[test]
+    fn compare_to_less_than() {
+        let r1 = BoundedRational::from_longs(1, 3).unwrap();
+        let r2 = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r1.compare_to(&r2), Ordering::Less);
+    }
+
+    #[test]
+    fn compare_to_greater_than() {
+        let r1 = BoundedRational::from_longs(3, 4).unwrap();
+        let r2 = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r1.compare_to(&r2), Ordering::Greater);
+    }
+
+    #[test]
+    fn compare_to_negative_vs_positive() {
+        let r1 = BoundedRational::from_longs(-1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r1.compare_to(&r2), Ordering::Less);
+    }
+
+    #[test]
+    fn compare_to_both_negative() {
+        let r1 = BoundedRational::from_longs(-1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(-1, 3).unwrap();
+        assert_eq!(r1.compare_to(&r2), Ordering::Less);
+    }
+
+    #[test]
+    fn compare_to_negative_denominator() {
+        let r1 = BoundedRational::from_longs(1, -2).unwrap();
+        let r2 = BoundedRational::from_longs(-1, 2).unwrap();
+        assert_eq!(r1.compare_to(&r2), Ordering::Equal);
+    }
+
+    #[test]
+    fn compare_to_zero() {
+        let r1 = BoundedRational::from_longs(0, 1).unwrap();
+        let r2 = BoundedRational::from_longs(0, 5).unwrap();
+        assert_eq!(r1.compare_to(&r2), Ordering::Equal);
+
+        let r3 = BoundedRational::from_longs(-1, 2).unwrap();
+        let r4 = BoundedRational::from_long(0);
+        assert_eq!(r3.compare_to(&r4), Ordering::Less);
+    }
+
+    // ── compare_to_one ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn compare_to_one_greater() {
+        let r1 = BoundedRational::from_longs(3, 2).unwrap();
+        assert_eq!(r1.compare_to_one(), Ordering::Greater);
+    }
+
+    #[test]
+    fn compare_to_one_less() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r1.compare_to_one(), Ordering::Less);
+    }
+
+    #[test]
+    fn compare_to_one_equal() {
+        let r1 = BoundedRational::from_longs(5, 5).unwrap();
+        assert_eq!(r1.compare_to_one(), Ordering::Equal);
+    }
+
+    #[test]
+    fn compare_to_one_negative_denominator() {
+        let r1 = BoundedRational::from_longs(3, -2).unwrap();
+        assert_eq!(r1.compare_to_one(), Ordering::Less);
+    }
+
+    // ── PartialEq / Eq ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn eq_same_value_different_representation() {
+        let r1 = BoundedRational::from_longs(2, 4).unwrap();
+        let r2 = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r1, r2);
+    }
+
+    #[test]
+    fn eq_negative_forms() {
+        let r1 = BoundedRational::from_longs(-1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(1, -2).unwrap();
+        let r3 = BoundedRational::from_longs(-2, 4).unwrap();
+        assert_eq!(r1, r2);
+        assert_eq!(r1, r3);
+    }
+
+    #[test]
+    fn not_eq_different_values() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(1, 3).unwrap();
+        assert_ne!(r1, r2);
+    }
+
+    // ── Hash ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn hash_matches_for_equal_values() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(2, 4).unwrap();
+
+        let mut hasher1 = DefaultHasher::new();
+        r1.hash(&mut hasher1);
+
+        let mut hasher2 = DefaultHasher::new();
+        r2.hash(&mut hasher2);
+
+        assert_eq!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn hash_matches_for_negative_denominator_form() {
+        let r1 = BoundedRational::from_longs(-1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(1, -2).unwrap();
+
+        let mut hasher1 = DefaultHasher::new();
+        r1.hash(&mut hasher1);
+
+        let mut hasher2 = DefaultHasher::new();
+        r2.hash(&mut hasher2);
+
+        assert_eq!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn hash_differs_for_different_values() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(1, 3).unwrap();
+
+        let mut hasher1 = DefaultHasher::new();
+        r1.hash(&mut hasher1);
+
+        let mut hasher2 = DefaultHasher::new();
+        r2.hash(&mut hasher2);
+
+        assert_ne!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn hash_set_deduplicates_equal_values() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(2, 4).unwrap();
+        let r3 = BoundedRational::from_longs(1, 3).unwrap();
+
+        let mut set = HashSet::new();
+        set.insert(r1);
+        set.insert(r2);
+        set.insert(r3);
+
+        assert_eq!(set.len(), 2);
     }
 }
