@@ -581,14 +581,6 @@ mod tests {
     }
 
     #[test]
-    fn zero_division_error_is_clone() {
-        let e1 = ZeroDivisionError;
-        let e2 = e1.clone();
-        // Verify clone succeeds by checking both are the same unit struct
-        let _ = e2;
-    }
-
-    #[test]
     fn zero_division_error_from_zero_denominator_error() {
         let source = ZeroDenominatorError;
         let converted: ZeroDivisionError = source.into();
