@@ -1,5 +1,7 @@
 use crate::evaluation::constants::{MAX_SIZE, MINUS_ONE, MINUS_TWO, ONE, TEN, TWO, ZERO};
 use num_bigint::{BigInt, Sign};
+use crate::evaluation::errors::ZeroDivisionError;
+use num_bigint::BigInt;
 use num_integer::Integer;
 use rand::Rng;
 use std::cmp::Ordering;
@@ -16,6 +18,18 @@ impl std::fmt::Display for ZeroDenominatorError {
 }
 
 impl std::error::Error for ZeroDenominatorError {}
+
+/// Converts a `ZeroDenominatorError` into a `ZeroDivisionError`.
+///
+/// This allows the `?` operator to automatically convert a
+/// `ZeroDenominatorError` into a `ZeroDivisionError` when a division-related
+/// operation creates a rational number with a zero denominator.
+impl From<ZeroDenominatorError> for ZeroDivisionError {
+    fn from(_: ZeroDenominatorError) -> Self {
+        ZeroDivisionError
+    }
+}
+
 /// Error returned when constructing a `BoundedRational` from a non-finite
 /// `f64` (`NaN` or infinite), neither of which has a finite rational value.
 #[derive(Clone, Debug, PartialEq)]
@@ -493,17 +507,17 @@ impl BoundedRational {
     /// performed in that case since there is no value to inspect.
     ///
     /// # Errors
-    /// Returns `Err(ZeroDenominatorError)` if `r`'s numerator is zero, since
+    /// Returns `Err(ZeroDivisionError)` if `r`'s numerator is zero, since
     /// the resulting denominator would be zero.
     pub fn inverse(
         r: Option<BoundedRational>,
-    ) -> Result<Option<BoundedRational>, ZeroDenominatorError> {
+    ) -> Result<Option<BoundedRational>, ZeroDivisionError> {
         let r = match r {
             Some(r) => r,
             None => return Ok(None),
         };
         if r.numerator == *ZERO {
-            return Err(ZeroDenominatorError);
+            return Err(ZeroDivisionError);
         }
         Ok(Some(BoundedRational {
             numerator: r.denominator,
@@ -514,11 +528,11 @@ impl BoundedRational {
     /// Returns `r1 / r2`, computed as `r1 * inverse(r2)`.
     ///
     /// # Errors
-    /// Returns `Err(ZeroDenominatorError)` if `r2` is zero.
+    /// Returns `Err(ZeroDivisionError)` if `r2` is zero.
     pub fn divide(
         r1: Option<BoundedRational>,
         r2: Option<BoundedRational>,
-    ) -> Result<Option<BoundedRational>, ZeroDenominatorError> {
+    ) -> Result<Option<BoundedRational>, ZeroDivisionError> {
         Ok(BoundedRational::multiply(r1, BoundedRational::inverse(r2)?))
     }
 
@@ -660,6 +674,20 @@ mod tests {
         let e2 = e1.clone();
         // Verify clone succeeds by checking both are the same unit struct
         let _ = e2;
+    }
+
+    // ── ZeroDivisionError display ────────────────────────────────────────────
+
+    #[test]
+    fn zero_division_error_display() {
+        assert_eq!(ZeroDivisionError.to_string(), "division by zero");
+    }
+
+    #[test]
+    fn zero_division_error_from_zero_denominator_error() {
+        let source = ZeroDenominatorError;
+        let converted: ZeroDivisionError = source.into();
+        assert_eq!(converted.to_string(), "division by zero");
     }
 
     // ── new ──────────────────────────────────────────────────────────────────
