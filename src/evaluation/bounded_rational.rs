@@ -530,14 +530,36 @@ impl BoundedRational {
         signum_bigint(&self.numerator) * signum_bigint(&self.denominator)
     }
 
-    /// Compares `r1` to `r2`, the way you'd compare two fractions by hand.
+    /// Multiplies `n1` and `n2`, skipping the multiplication when either side
+    /// is `1` or `-1` (returning a clone or negation of the other operand
+    /// instead). Used by `compare_to` to speed up cross-multiplication when a
+    /// numerator or denominator is a plain integer.
+    fn cross_multiply(n1: &BigInt, n2: &BigInt) -> BigInt {
+        if *n1 == *ONE {
+            n2.clone()
+        } else if *n1 == *MINUS_ONE {
+            -n2
+        } else if *n2 == *ONE {
+            n1.clone()
+        } else if *n2 == *MINUS_ONE {
+            -n1
+        } else {
+            n1 * n2
+        }
+    }
+
+    /// Compares `self` to `other`, the way you'd compare two fractions by hand.
     ///
     /// # How it works
     /// 1. First it checks the signs. If one number is negative and the other
     ///    is positive (or zero), we already know the answer and can skip the
     ///    expensive math entirely.
     /// 2. If the signs match, it cross-multiplies: `a/b` vs `c/d` becomes
-    ///    comparing `a*d` vs `c*b`. This avoids doing any division.
+    ///    comparing `a*d` vs `c*b`. via [`cross_multiply`](Self::cross_multiply)
+    ///    rather than the raw `*` operator, so that a numerator or
+    ///    denominator of `1`/`-1` (by far the most common case — e.g. either
+    ///    side being a plain integer) is handled without a full `BigInt`
+    ///    multiplication. This also avoids doing any division.
     /// 3. Because a denominator can technically be stored as negative, the
     ///    result of the cross-multiplication is flipped if one of the two
     ///    denominators is negative.
@@ -548,8 +570,8 @@ impl BoundedRational {
             return sign1.cmp(&sign2);
         }
 
-        let lhs = &self.numerator * &other.denominator;
-        let rhs = &other.numerator * &self.denominator;
+        let lhs = Self::cross_multiply(&self.numerator, &other.denominator);
+        let rhs = Self::cross_multiply(&other.numerator, &self.denominator);
         let cross = lhs.cmp(&rhs);
 
         let den_sign_product = signum_bigint(&self.denominator) * signum_bigint(&other.denominator);
@@ -557,17 +579,6 @@ impl BoundedRational {
             cross.reverse()
         } else {
             cross
-        }
-    }
-
-    /// Compares `r` to the value `1`. Cheaper than `compare_to(&ONE)`
-    /// since it skips a multiplication.
-    pub fn compare_to_one(&self) -> Ordering {
-        let cmp = self.numerator.cmp(&self.denominator);
-        if signum_bigint(&self.denominator) < 0 {
-            cmp.reverse()
-        } else {
-            cmp
         }
     }
 }
@@ -1474,6 +1485,22 @@ mod tests {
     // ── compare_to ─────────────────────────────────────────────────────────
 
     #[test]
+    fn compare_to_integers() {
+        let r1 = BoundedRational::from_long(3);
+        let r2 = BoundedRational::from_long(5);
+        assert_eq!(r1.compare_to(&r2), Ordering::Less);
+        assert_eq!(r2.compare_to(&r1), Ordering::Greater);
+    }
+
+    #[test]
+    fn compare_to_integer_vs_fraction() {
+        let r1 = BoundedRational::from_long(1); // 1/1
+        let r2 = BoundedRational::from_longs(3, 2).unwrap(); // 3/2
+        assert_eq!(r1.compare_to(&r2), Ordering::Less);
+        assert_eq!(r2.compare_to(&r1), Ordering::Greater);
+    }
+
+    #[test]
     fn compare_to_equal_values() {
         let r1 = BoundedRational::from_longs(1, 2).unwrap();
         let r2 = BoundedRational::from_longs(2, 4).unwrap();
@@ -1495,6 +1522,29 @@ mod tests {
     }
 
     #[test]
+    fn compare_to_numerator_is_minus_one() {
+        let r1 = BoundedRational::from_longs(-1, 5).unwrap();
+        let r2 = BoundedRational::from_longs(-1, 3).unwrap();
+        // -1/5 = -0.2, -1/3 ≈ -0.333, so -1/5 > -1/3
+        assert_eq!(r1.compare_to(&r2), Ordering::Greater);
+    }
+
+    #[test]
+    fn compare_to_denominator_is_minus_one() {
+        let r1 = BoundedRational::from_longs(3, -1).unwrap(); // -3
+        let r2 = BoundedRational::from_longs(2, -1).unwrap(); // -2
+        assert_eq!(r1.compare_to(&r2), Ordering::Less);
+    }
+
+    #[test]
+    fn compare_to_one_negative_denominator_flips_result() {
+        let r1 = BoundedRational::from_longs(1, -2).unwrap(); // -1/2
+        let r2 = BoundedRational::from_longs(1, 3).unwrap(); // 1/3
+        assert_eq!(r1.compare_to(&r2), Ordering::Less);
+        assert_eq!(r2.compare_to(&r1), Ordering::Greater);
+    }
+
+    #[test]
     fn compare_to_negative_vs_positive() {
         let r1 = BoundedRational::from_longs(-1, 2).unwrap();
         let r2 = BoundedRational::from_longs(1, 2).unwrap();
@@ -1506,6 +1556,13 @@ mod tests {
         let r1 = BoundedRational::from_longs(-1, 2).unwrap();
         let r2 = BoundedRational::from_longs(-1, 3).unwrap();
         assert_eq!(r1.compare_to(&r2), Ordering::Less);
+    }
+
+    #[test]
+    fn compare_to_both_negative_denominators_no_flip_needed() {
+        let r1 = BoundedRational::from_longs(-1, -2).unwrap(); // 1/2
+        let r2 = BoundedRational::from_longs(-1, -3).unwrap(); // 1/3
+        assert_eq!(r1.compare_to(&r2), Ordering::Greater);
     }
 
     #[test]
@@ -1526,30 +1583,11 @@ mod tests {
         assert_eq!(r3.compare_to(&r4), Ordering::Less);
     }
 
-    // ── compare_to_one ─────────────────────────────────────────────────────────
-
     #[test]
-    fn compare_to_one_greater() {
-        let r1 = BoundedRational::from_longs(3, 2).unwrap();
-        assert_eq!(r1.compare_to_one(), Ordering::Greater);
-    }
-
-    #[test]
-    fn compare_to_one_less() {
-        let r1 = BoundedRational::from_longs(1, 2).unwrap();
-        assert_eq!(r1.compare_to_one(), Ordering::Less);
-    }
-
-    #[test]
-    fn compare_to_one_equal() {
-        let r1 = BoundedRational::from_longs(5, 5).unwrap();
-        assert_eq!(r1.compare_to_one(), Ordering::Equal);
-    }
-
-    #[test]
-    fn compare_to_one_negative_denominator() {
-        let r1 = BoundedRational::from_longs(3, -2).unwrap();
-        assert_eq!(r1.compare_to_one(), Ordering::Less);
+    fn compare_to_zero_with_negative_denominator() {
+        let r1 = BoundedRational::from_longs(0, -5).unwrap();
+        let r2 = BoundedRational::from_long(0);
+        assert_eq!(r1.compare_to(&r2), Ordering::Equal);
     }
 
     // ── PartialEq / Eq ─────────────────────────────────────────────────────────
