@@ -1,7 +1,6 @@
 use crate::evaluation::constants::{MAX_SIZE, MINUS_ONE, MINUS_TWO, ONE, TEN, TWO, ZERO};
-use num_bigint::{BigInt, Sign};
 use crate::evaluation::errors::ZeroDivisionError;
-use num_bigint::BigInt;
+use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use rand::Rng;
 use std::cmp::Ordering;
