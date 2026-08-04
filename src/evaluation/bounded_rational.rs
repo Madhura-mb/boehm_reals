@@ -574,13 +574,26 @@ impl BoundedRational {
     ///    side being a plain integer) is handled without a full `BigInt`
     ///    multiplication. This also avoids doing any division.
     /// 3. Because a denominator can technically be stored as negative, the
-    ///    result of the cross-multiplication is flipped if one of the two
+    ///    result of the cross-multiplication is flipped if exactly one of the two
     ///    denominators is negative.
-    pub fn compare_to(&self, other: &Self) -> Ordering {
+    pub fn compare_to(&self, other: &BoundedRational) -> Ordering {
         let sign1 = self.signum();
         let sign2 = other.signum();
         if sign1 != sign2 {
             return sign1.cmp(&sign2);
+        }
+
+        if self.numerator == *ZERO && other.signum() == 1 {
+            return Ordering::Less;
+        }
+        if self.numerator == *ZERO && other.signum() == -1 {
+            return Ordering::Greater;
+        }
+        if self.signum() == 1 && other.numerator == *ZERO {
+            return Ordering::Greater;
+        }
+        if self.signum() == -1 && other.numerator == *ZERO {
+            return Ordering::Less;
         }
 
         let lhs = Self::cross_multiply(&self.numerator, &other.denominator);
