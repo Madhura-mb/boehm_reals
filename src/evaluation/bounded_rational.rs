@@ -2,6 +2,7 @@ use crate::evaluation::constants::{MAX_SIZE, MINUS_ONE, MINUS_TWO, ONE, TEN, TWO
 use crate::evaluation::errors::ZeroDivisionError;
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
+use num_traits::ToPrimitive;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
@@ -607,6 +608,144 @@ impl BoundedRational {
             cross
         }
     }
+
+    /// Returns this value as an `i32`, provided it is a whole number.
+    ///
+    /// The value is reduced first via [`reduce`]; if the reduced
+    /// denominator isn't `1` the value has a genuine fractional part and
+    /// isn't representable as an integer.
+    ///
+    /// # Errors
+    /// Returns `Err` if the reduced denominator isn't `1`, or if the
+    /// resulting numerator doesn't fit in an `i32`.
+    pub fn int_value(&self) -> Result<i32, &'static str> {
+        let reduced = self.reduce().positive_den();
+        if reduced.denominator != *ONE {
+            return Err("intValue of non-int");
+        }
+        reduced
+            .numerator
+            .to_i32()
+            .ok_or("intValue: numerator does not fit in i32")
+    }
+
+    /// Converts this rational number to the closest `f64` value.
+    ///
+    /// Rounding is done correctly, and if the value is exactly halfway
+    /// between two `f64` values, it is rounded **away from zero**.
+    ///
+    /// # How it works
+    /// - If the number is negative, the function converts its positive
+    ///   version and then makes the result negative.
+    /// - For positive numbers, it scales the numerator and denominator by
+    ///   powers of two so that the division has enough precision to choose
+    ///   the correct 53-bit `f64` mantissa.
+    /// - It then computes the exponent and mantissa and builds the final
+    ///   IEEE-754 `f64` value using `f64::from_bits`.
+    ///
+    /// # Special cases
+    /// - If the value is `0`, the function returns `0.0`.
+    /// - If the value is too small to be represented by `f64`, it also
+    ///   returns `0.0`.
+    /// - If the value is too large to fit in an `f64`, it returns
+    ///   `f64::INFINITY`.
+    ///
+    /// This method is designed to give an accurate floating-point
+    /// approximation of the rational number while handling very small and
+    /// very large values safely.
+    pub fn double_value(&self) -> f64 {
+        let sign = self.signum();
+        if sign < 0 {
+            return -BoundedRational::negate(Some(self.clone()))
+                .unwrap()
+                .double_value();
+        }
+
+        let appr_exp = self.numerator.bits() as i64 - self.denominator.bits() as i64;
+        if appr_exp < -1100 || sign == 0 {
+            return 0.0;
+        }
+
+        let needed_prec = appr_exp - 80;
+        let dividend = if needed_prec < 0 {
+            &self.numerator << (-needed_prec) as usize
+        } else {
+            self.numerator.clone()
+        };
+        let divisor = if needed_prec > 0 {
+            &self.denominator << needed_prec as usize
+        } else {
+            self.denominator.clone()
+        };
+
+        let quotient = dividend / divisor;
+        let q_length = quotient.bits() as i64;
+        let mut extra_bits = q_length - 53;
+        let mut exponent = needed_prec + q_length;
+
+        if exponent >= -1021 {
+            exponent -= 1;
+        } else {
+            extra_bits += (-1022 - exponent) + 1;
+            exponent = -1023;
+        }
+
+        if exponent > 1024 {
+            return f64::INFINITY;
+        }
+
+        let rounding = BigInt::from(1) << (extra_bits - 1).max(0) as usize;
+        let big_mantissa = (quotient + rounding) >> extra_bits.max(0) as usize;
+
+        let mantissa = big_mantissa.to_i64().unwrap_or(0);
+        let bits: u64 = (mantissa as u64 & ((1u64 << 52) - 1)) | (((exponent + 1023) as u64) << 52);
+        f64::from_bits(bits)
+    }
+
+    /// Returns a decimal string with exactly `n` digits after the decimal
+    /// point.
+    ///
+    /// The value is **truncated** (rounded toward zero), so any extra digits
+    /// after the `n`th decimal place are simply removed instead of being
+    /// rounded.
+    ///
+    /// # How it works
+    /// - The number is multiplied by `10^n`.
+    /// - Integer division is used to discard any remaining fractional part.
+    /// - The resulting digits are padded with leading zeros if needed so
+    ///   there is always at least one digit before the decimal point.
+    /// - If the original value is negative, a `-` sign is added to the
+    ///   beginning of the string.
+    ///
+    /// # Example
+    /// `12.3456` with `n = 2` becomes `"12.34"`.
+    /// `-0.9876` with `n = 3` becomes `"-0.987"`.
+    pub fn to_string_truncated(&self, n: u32) -> String {
+        let mut scale = ONE.clone();
+        for _ in 0..n {
+            scale *= &*TEN;
+        }
+
+        let mut num_abs = self.numerator.clone();
+        if num_abs < *ZERO {
+            num_abs = -num_abs;
+        }
+        let mut den_abs = self.denominator.clone();
+        if den_abs < *ZERO {
+            den_abs = -den_abs;
+        }
+
+        let mut digits = (num_abs * scale / den_abs).to_string();
+        let n = n as usize;
+        let mut len = digits.len();
+        if len < n + 1 {
+            digits = "0".repeat(n + 1 - len) + &digits;
+            len = n + 1;
+        }
+
+        let sign = if self.signum() < 0 { "-" } else { "" };
+        format!("{}{}.{}", sign, &digits[..len - n], &digits[len - n..])
+    }
 }
 
 impl PartialEq for BoundedRational {
@@ -633,6 +772,15 @@ impl Hash for BoundedRational {
         let reduced = self.reduce().positive_den();
         reduced.numerator.hash(state);
         reduced.denominator.hash(state);
+    }
+}
+
+impl std::fmt::Display for BoundedRational {
+    /// Formats as `numerator/denominator` using the raw, possibly
+    /// unreduced, stored values. This is a debug/log representation, not a
+    /// user-facing one.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.numerator, self.denominator)
     }
 }
 
@@ -1711,5 +1859,126 @@ mod tests {
         set.insert(r3);
 
         assert_eq!(set.len(), 2);
+    }
+
+    // ── int_value ────────────────────────────────────────────────────────────
+
+    /// Acceptance criterion: int_value() on 6/2 returns Ok(3)
+    #[test]
+    fn int_value_six_halves_returns_three() {
+        let r = BoundedRational::from_longs(6, 2).unwrap();
+        assert_eq!(r.int_value(), Ok(3));
+    }
+
+    /// Acceptance criterion: int_value() on 1/3 returns Err
+    #[test]
+    fn int_value_one_third_returns_err() {
+        let r = BoundedRational::from_longs(1, 3).unwrap();
+        assert!(r.int_value().is_err());
+    }
+
+    #[test]
+    fn int_value_negative_integer() {
+        let r = BoundedRational::from_longs(-8, 2).unwrap();
+        assert_eq!(r.int_value(), Ok(-4));
+    }
+
+    #[test]
+    fn int_value_zero() {
+        let r = BoundedRational::from_long(0);
+        assert_eq!(r.int_value(), Ok(0));
+    }
+
+    #[test]
+    fn int_value_out_of_i32_range_errs() {
+        let r = BoundedRational::from_bigint(BigInt::from(i64::MAX));
+        assert!(r.int_value().is_err());
+    }
+
+    #[test]
+    fn int_value_negative_denominator_still_reduces_correctly() {
+        // -6/-2 reduces to 3/1
+        let r = BoundedRational::from_longs(-6, -2).unwrap();
+        assert_eq!(r.int_value(), Ok(3));
+    }
+
+    // ── double_value ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn double_value_exact_half() {
+        let r = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r.double_value(), 0.5);
+    }
+
+    #[test]
+    fn double_value_negative_fraction() {
+        let r = BoundedRational::from_longs(-3, 4).unwrap();
+        assert_eq!(r.double_value(), -0.75);
+    }
+
+    #[test]
+    fn double_value_integer() {
+        let r = BoundedRational::from_long(5);
+        assert_eq!(r.double_value(), 5.0);
+    }
+
+    #[test]
+    fn double_value_zero() {
+        let r = BoundedRational::from_long(0);
+        assert_eq!(r.double_value(), 0.0);
+    }
+
+    #[test]
+    fn double_value_repeating_fraction_is_close() {
+        let r = BoundedRational::from_longs(1, 3).unwrap();
+        assert!((r.double_value() - (1.0 / 3.0)).abs() < 1e-15);
+    }
+
+    // ── to_string_truncated ──────────────────────────────────────────────────
+
+    /// Acceptance criterion: to_string_truncated(2) on 1/3 returns "0.33"
+    #[test]
+    fn to_string_truncated_one_third_two_digits() {
+        let r = BoundedRational::from_longs(1, 3).unwrap();
+        assert_eq!(r.to_string_truncated(2), "0.33");
+    }
+
+    #[test]
+    fn to_string_truncated_negative_value() {
+        let r = BoundedRational::from_longs(-1, 3).unwrap();
+        assert_eq!(r.to_string_truncated(2), "-0.33");
+    }
+
+    #[test]
+    fn to_string_truncated_pads_leading_zeros() {
+        let r = BoundedRational::from_longs(1, 1000).unwrap();
+        assert_eq!(r.to_string_truncated(2), "0.00");
+    }
+
+    #[test]
+    fn to_string_truncated_zero_precision() {
+        let r = BoundedRational::from_long(5);
+        assert_eq!(r.to_string_truncated(0), "5.");
+    }
+
+    #[test]
+    fn to_string_truncated_negative_denominator_still_correct_sign() {
+        // 1/-3 is negative, even though signum uses the raw (unreduced) form.
+        let r = BoundedRational::from_longs(1, -3).unwrap();
+        assert_eq!(r.to_string_truncated(2), "-0.33");
+    }
+
+    // ── Display ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn display_basic_fraction() {
+        let r = BoundedRational::from_longs(3, 4).unwrap();
+        assert_eq!(r.to_string(), "3/4");
+    }
+
+    #[test]
+    fn display_negative_denominator_shown_raw() {
+        let r = BoundedRational::from_longs(3, -4).unwrap();
+        assert_eq!(r.to_string(), "3/-4");
     }
 }
