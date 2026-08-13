@@ -1,0 +1,20 @@
+[workspace]
+
+[package]
+name = "boehm_reals-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+boehm_reals = { path = ".." }
+
+[[bin]]
+name = "bounded_rational"
+path = "fuzz_targets/bounded_rational.rs"
+test = false
+doc = false
