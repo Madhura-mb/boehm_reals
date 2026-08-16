@@ -666,10 +666,7 @@ impl BoundedRational {
         if nicer.denominator == *ONE {
             // BigInt's to_f64 saturates to infinity for out-of-range magnitudes
             // rather than returning None, so this fallback is defensive only.
-            return match nicer.numerator.to_f64() {
-                Some(value) => value,
-                None => f64::INFINITY,
-            };
+            return nicer.numerator.to_f64().unwrap_or(f64::INFINITY);
         }
 
         let sign = nicer.signum();
