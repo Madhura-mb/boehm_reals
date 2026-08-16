@@ -609,7 +609,7 @@ impl BoundedRational {
         }
     }
 
-    /// Returns this value as an `i32`, provided it is a whole number.
+    /// Returns this value as an `i64`, provided it is a whole number.
     ///
     /// The value is reduced first via [`reduce`]; if the reduced
     /// denominator isn't `1` the value has a genuine fractional part and
@@ -617,16 +617,16 @@ impl BoundedRational {
     ///
     /// # Errors
     /// Returns `Err` if the reduced denominator isn't `1`, or if the
-    /// resulting numerator doesn't fit in an `i32`.
-    pub fn int_value(&self) -> Result<i32, &'static str> {
+    /// resulting numerator doesn't fit in an `i64`.
+    pub fn int_value(&self) -> Result<i64, &'static str> {
         let reduced = self.reduce().positive_den();
         if reduced.denominator != *ONE {
             return Err("intValue of non-int");
         }
         reduced
             .numerator
-            .to_i32()
-            .ok_or("intValue: numerator does not fit in i32")
+            .to_i64()
+            .ok_or("intValue: numerator does not fit in i64")
     }
 
     /// Converts this rational number to the closest `f64` value.
@@ -634,14 +634,20 @@ impl BoundedRational {
     /// Rounding is done correctly, and if the value is exactly halfway
     /// between two `f64` values, it is rounded **away from zero**.
     ///
-    /// # How it works
-    /// - If the number is negative, the function converts its positive
-    ///   version and then makes the result negative.
-    /// - For positive numbers, it scales the numerator and denominator by
-    ///   powers of two so that the division has enough precision to choose
-    ///   the correct 53-bit `f64` mantissa.
-    /// - It then computes the exponent and mantissa and builds the final
-    ///   IEEE-754 `f64` value using `f64::from_bits`.
+    /// # Fast path
+    /// The value is first reduced to lowest terms with a positive
+    /// denominator via [`reduce`] + [`positive_den`]. If the resulting
+    /// denominator is `1` (i.e. this value is a whole number), the numerator
+    /// is converted to `f64` directly via `BigInt`'s built-in conversion,
+    /// skipping the manual bit-manipulation path entirely.
+    ///
+    /// # Slow path
+    /// For genuine fractions, the numerator and denominator are prescaled by
+    /// a power of two so that dividing them yields a quotient with enough
+    /// bits (roughly 80 extra) to determine the correctly-rounded 53-bit
+    /// mantissa. The quotient's bit length then determines the binary
+    /// exponent, the mantissa is rounded to 53 bits, and the IEEE-754 bit
+    /// pattern is assembled directly via `f64::from_bits`.
     ///
     /// # Special cases
     /// - If the value is `0`, the function returns `0.0`.
@@ -654,28 +660,63 @@ impl BoundedRational {
     /// approximation of the rational number while handling very small and
     /// very large values safely.
     pub fn double_value(&self) -> f64 {
-        let sign = self.signum();
-        if sign < 0 {
-            return -BoundedRational::negate(Some(self.clone()))
-                .unwrap()
-                .double_value();
+        let nicer = self.reduce().positive_den();
+
+        // Fast path: whole numbers convert directly, no bit manipulation needed.
+        if nicer.denominator == *ONE {
+            // BigInt's to_f64 saturates to infinity for out-of-range magnitudes
+            // rather than returning None, so this fallback is defensive only.
+            return match nicer.numerator.to_f64() {
+                Some(value) => value,
+                None => f64::INFINITY,
+            };
         }
 
-        let appr_exp = self.numerator.bits() as i64 - self.denominator.bits() as i64;
+        let sign = nicer.signum();
+        if sign < 0 {
+            return -BoundedRational::negate(Some(nicer)).unwrap().double_value();
+        }
+
+        let appr_exp = nicer.numerator.bits() as i64 - nicer.denominator.bits() as i64;
+
+        // The smallest positive value representable by f64 at all is the
+        // smallest subnormal, 2^-1074. If appr_exp were exact, anything below
+        // that threshold would safely be treated as 0. Since it's only
+        // approximate, -1100 (comfortably below -1074) is used instead, giving
+        // enough margin that the approximation's imprecision can never cause a
+        // value that's actually still representable as a subnormal to be
+        // wrongly short-circuited to 0.0. Values that genuinely fall below
+        // -1100 are unambiguously going to underflow to zero regardless, so
+        // bailing out here also avoids doing an expensive big-integer division
+        // for a result we already know will be ~0.
         if appr_exp < -1100 || sign == 0 {
             return 0.0;
         }
 
+        // An f64 mantissa holds 53 bits of precision. To produce a correctly
+        // rounded (not just truncated) result, we need a few extra bits beyond
+        // those 53: enough to see past the rounding point and decide which way
+        // to round, plus a safety margin to absorb appr_exp's own imprecision
+        // (see the comment above, since appr_exp is only an approximate
+        // exponent, not exact). 80 extra bits is comfortably more than enough
+        // for both purposes while still being cheap - it costs only a modestly
+        // larger BigInt division, not a meaningfully slower one.
+        //
+        // needed_prec shifts the division so the resulting quotient has
+        // roughly (53 + 80) significant bits instead of just enough to cover
+        // the integer part - that's what gives extra_bits (computed later from
+        // the quotient's actual bit length) enough headroom to round correctly
+        // down to 53 bits.
         let needed_prec = appr_exp - 80;
         let dividend = if needed_prec < 0 {
-            &self.numerator << (-needed_prec) as usize
+            &nicer.numerator << (-needed_prec) as usize
         } else {
-            self.numerator.clone()
+            nicer.numerator.clone()
         };
         let divisor = if needed_prec > 0 {
-            &self.denominator << needed_prec as usize
+            &nicer.denominator << needed_prec as usize
         } else {
-            self.denominator.clone()
+            nicer.denominator.clone()
         };
 
         let quotient = dividend / divisor;
@@ -787,6 +828,7 @@ impl std::fmt::Display for BoundedRational {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::f64;
     use num_bigint::BigInt;
     use std::cmp::Ordering;
     use std::collections::HashSet;
@@ -1890,8 +1932,9 @@ mod tests {
     }
 
     #[test]
-    fn int_value_out_of_i32_range_errs() {
-        let r = BoundedRational::from_bigint(BigInt::from(i64::MAX));
+    fn int_value_out_of_i64_range_errs() {
+        let huge = BigInt::from(i64::MAX) + BigInt::from(1);
+        let r = BoundedRational::from_bigint(huge);
         assert!(r.int_value().is_err());
     }
 
@@ -1903,6 +1946,19 @@ mod tests {
     }
 
     // ── double_value ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn double_value_fast_path_large_integer() {
+        let r = BoundedRational::from_longs(-100, -1).unwrap(); // reduces to 100/1
+        assert_eq!(r.double_value(), 100.0);
+    }
+
+    #[test]
+    fn double_value_fast_path_matches_slow_path_result() {
+        let as_fraction = BoundedRational::from_longs(20, 4).unwrap(); // reduces to 5/1
+        let as_integer = BoundedRational::from_long(5);
+        assert_eq!(as_fraction.double_value(), as_integer.double_value());
+    }
 
     #[test]
     fn double_value_exact_half() {
@@ -1932,6 +1988,134 @@ mod tests {
     fn double_value_repeating_fraction_is_close() {
         let r = BoundedRational::from_longs(1, 3).unwrap();
         assert!((r.double_value() - (1.0 / 3.0)).abs() < 1e-15);
+    }
+
+    // ── double_value: Maximum / overflow ────────────────────────────────────
+
+    #[test]
+    fn double_value_largest_finite_f64() {
+        let r = BoundedRational::value_of_double(f64::MAX).unwrap();
+        assert_eq!(r.double_value(), f64::MAX);
+    }
+
+    #[test]
+    fn double_value_overflow_returns_infinity() {
+        let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
+        let doubled =
+            BoundedRational::multiply(Some(max_r), Some(BoundedRational::from_long(2))).unwrap();
+        assert_eq!(doubled.double_value(), f64::INFINITY);
+    }
+
+    #[test]
+    fn double_value_negative_overflow_returns_negative_infinity() {
+        let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
+        let doubled =
+            BoundedRational::multiply(Some(max_r), Some(BoundedRational::from_long(-2))).unwrap();
+        assert_eq!(doubled.double_value(), f64::NEG_INFINITY);
+    }
+
+    // ── double_value: Normal / subnormal boundary ───────────────────────────
+
+    #[test]
+    fn double_value_smallest_normal() {
+        // 2^-1022, the smallest positive normal f64.
+        let r = BoundedRational::new(BigInt::from(1), BigInt::from(1) << 1022).unwrap();
+        assert_eq!(r.double_value(), f64::MIN_POSITIVE);
+    }
+
+    #[test]
+    fn double_value_largest_subnormal() {
+        // (2^52 - 1) * 2^-1074, the largest positive subnormal f64 —
+        // one ULP (Unit in the Last Place) below the smallest normal.
+        let numerator = (BigInt::from(1) << 52) - BigInt::from(1);
+        let r = BoundedRational::new(numerator, BigInt::from(1) << 1074).unwrap();
+        let expected = f64::MIN_POSITIVE - f64::from_bits(1);
+        assert_eq!(r.double_value(), expected);
+    }
+
+    #[test]
+    fn double_value_smallest_subnormal() {
+        // 2^-1074, the smallest positive representable f64 at all.
+        let r = BoundedRational::new(BigInt::from(1), BigInt::from(1) << 1074).unwrap();
+        assert_eq!(r.double_value(), f64::from_bits(1));
+    }
+
+    #[test]
+    fn double_value_negative_smallest_subnormal() {
+        let r = BoundedRational::new(BigInt::from(-1), BigInt::from(1) << 1074).unwrap();
+        assert_eq!(r.double_value(), -f64::from_bits(1));
+    }
+
+    // ── double_value: Rounding ───────────────────────────────────────────────
+
+    #[test]
+    fn double_value_positive_halfway_rounds_away_from_zero() {
+        // 2^53 + 1, over denominator 2, sits exactly halfway between the
+        // representable f64 values 2^52 and 2^52 + 1 (ULP is 1 there).
+        // Ties-away-from-zero must pick the larger-magnitude neighbor.
+        let two_pow_52 = BigInt::from(1) << 52;
+        let numerator: BigInt = &two_pow_52 * BigInt::from(2) + BigInt::from(1);
+        let r = BoundedRational::new(numerator, BigInt::from(2)).unwrap();
+
+        let neighbor: BigInt = &two_pow_52 + BigInt::from(1);
+        let expected = match neighbor.to_f64() {
+            Some(v) => v,
+            None => panic!("expected value must be representable"),
+        };
+        assert_eq!(r.double_value(), expected);
+    }
+
+    #[test]
+    fn double_value_negative_halfway_rounds_away_from_zero() {
+        let two_pow_52 = BigInt::from(1) << 52;
+        let magnitude: BigInt = &two_pow_52 * BigInt::from(2) + BigInt::from(1);
+        let numerator = -magnitude;
+        let r = BoundedRational::new(numerator, BigInt::from(2)).unwrap();
+
+        let neighbor: BigInt = &two_pow_52 + BigInt::from(1);
+        let expected = match neighbor.to_f64() {
+            Some(v) => -v,
+            None => panic!("expected value must be representable"),
+        };
+        assert_eq!(r.double_value(), expected);
+    }
+
+    #[test]
+    fn double_value_halfway_between_zero_and_smallest_subnormal() {
+        // Exactly half the smallest subnormal (2^-1075) sits precisely
+        // between 0.0 and the smallest representable f64. Ties away from
+        // zero means this should round up to the smallest subnormal, not
+        // down to zero, and must not panic or produce NaN.
+        let r = BoundedRational::new(BigInt::from(1), BigInt::from(1) << 1075).unwrap();
+        assert_eq!(r.double_value(), f64::from_bits(1));
+    }
+
+    #[test]
+    fn double_value_negative_halfway_between_zero_and_smallest_subnormal() {
+        let r = BoundedRational::new(BigInt::from(-1), BigInt::from(1) << 1075).unwrap();
+        assert_eq!(r.double_value(), -f64::from_bits(1));
+    }
+
+    // ── double_value: Huge BigInts ───────────────────────────────────────────
+
+    #[test]
+    fn double_value_huge_numerator_and_denominator_evaluates_to_two() {
+        // Both numerator and denominator have thousands of bits, but their
+        // exact ratio is 2. Confirms no panic and no silent mantissa
+        // truncation when reducing/dividing very large BigInts.
+        let factor = (BigInt::from(1) << 3000) + BigInt::from(1);
+        let numerator = &factor * BigInt::from(2);
+        let r = BoundedRational::new(numerator, factor).unwrap();
+        assert_eq!(r.double_value(), 2.0);
+    }
+
+    #[test]
+    fn double_value_huge_numerator_and_denominator_evaluates_to_one_point_five() {
+        let factor = (BigInt::from(1) << 3000) + BigInt::from(1);
+        let numerator = &factor * BigInt::from(3);
+        let denominator = &factor * BigInt::from(2);
+        let r = BoundedRational::new(numerator, denominator).unwrap();
+        assert_eq!(r.double_value(), 1.5);
     }
 
     // ── to_string_truncated ──────────────────────────────────────────────────
