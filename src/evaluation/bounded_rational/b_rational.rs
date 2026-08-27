@@ -5,6 +5,7 @@ use num_integer::Integer;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
+use std::ops::Add;
 
 /// Error returned when a `BoundedRational` is constructed with a zero denominator.
 #[derive(Clone, Debug)]
@@ -335,51 +336,6 @@ impl BoundedRational {
             numerator: -r.numerator,
             denominator: r.denominator,
         }
-    }
-
-    /// Returns the sum of `r1` and `r2`, possibly reduces.
-    ///
-    /// If either operand is exactly zero, the other operand is returned
-    /// unchanged (aside from being passed through [`maybe_reduce`]), avoiding
-    /// unnecessary cross multiplication work entirely.
-    ///
-    /// Before performing the addition, this function may reduce both operands
-    /// when their combined bit size is large. This heuristic helps avoid
-    /// creating unnecessarily large intermediate numerators and denominators
-    /// during cross multiplication while preserving the final value.
-    ///
-    /// The resulting fraction is passed through [`maybe_reduce`] to keep its
-    /// size within the configured bounds when possible.
-    pub fn add(r1: BoundedRational, r2: BoundedRational) -> BoundedRational {
-        // Zero check: adding zero is a no-op, so just return the other operand.
-        if r1.numerator == *ZERO {
-            return BoundedRational::maybe_reduce(r2);
-        }
-        if r2.numerator == *ZERO {
-            return BoundedRational::maybe_reduce(r1);
-        }
-
-        // Heuristic: if sum of input bit sizes is already close to MAX_SIZE,
-        // reduce inputs first to avoid huge intermediates
-        let input_bits = r1.numerator.bits()
-            + r1.denominator.bits()
-            + r2.numerator.bits()
-            + r2.denominator.bits();
-
-        let (r1, r2) = if input_bits > (MAX_SIZE as u64 * 3 / 4) {
-            // Reduce both inputs before multiplying
-            (r1.reduce().positive_den(), r2.reduce().positive_den())
-        } else {
-            (r1, r2)
-        };
-
-        let den = &r1.denominator * &r2.denominator;
-        let num = &r1.numerator * &r2.denominator + &r1.denominator * &r2.numerator;
-
-        BoundedRational::maybe_reduce(BoundedRational {
-            numerator: num,
-            denominator: den,
-        })
     }
 
     /// Returns `r1 - r2`.

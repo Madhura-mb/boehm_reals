@@ -5,6 +5,19 @@ use std::iter::Sum;
 use std::mem;
 use std::ops::{Add, AddAssign};
 
+/// Returns the sum of `r1` and `r2`, possibly reduces.
+///
+/// If either operand is exactly zero, the other operand is returned
+/// unchanged (aside from being passed through [`maybe_reduce`]), avoiding
+/// unnecessary cross multiplication work entirely.
+///
+/// Before performing the addition, this function may reduce both operands
+/// when their combined bit size is large. This heuristic helps avoid
+/// creating unnecessarily large intermediate numerators and denominators
+/// during cross multiplication while preserving the final value.
+///
+/// The resulting fraction is passed through [`maybe_reduce`] to keep its
+/// size within the configured bounds when possible.
 macro_rules! boundedrational_add {
     ($a:expr, $a_owned:expr, $b:expr, $b_owned:expr) => {{
         // Zero check: adding zero is a no-op, so just return the other

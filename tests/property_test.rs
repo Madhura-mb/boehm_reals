@@ -2,6 +2,7 @@ use boehm_reals::evaluation::bounded_rational::BoundedRational;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use proptest::prelude::*;
+use std::ops::Add;
 
 fn rational(numerator: i64, denominator: i64) -> BoundedRational {
     BoundedRational::from_longs(numerator, denominator).expect("generated denominator is non-zero")
