@@ -1,4 +1,4 @@
-use super::bounded_rational::BoundedRational;
+use super::b_rational::BoundedRational;
 use crate::evaluation::constants::{MAX_SIZE, ZERO};
 use num_bigint::BigInt;
 use std::iter::Sum;

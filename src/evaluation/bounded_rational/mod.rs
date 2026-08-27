@@ -5,6 +5,6 @@
 mod macros;
 
 mod add;
-mod bounded_rational;
+mod b_rational;
 
-pub use bounded_rational::{BoundedRational, NonFiniteError, ZeroDenominatorError};
+pub use b_rational::{BoundedRational, NonFiniteError, ZeroDenominatorError};
