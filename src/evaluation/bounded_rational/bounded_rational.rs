@@ -996,12 +996,6 @@ mod tests {
 
     // ── maybe_reduce ─────────────────────────────────────────────────────────
 
-    // /// Acceptance criterion: maybe_reduce(None) returns None
-    // #[test]
-    // fn maybe_reduce_none_returns_none() {
-    //     assert!(BoundedRational::maybe_reduce(None).is_none());
-    // }
-
     #[test]
     fn maybe_reduce_small_fraction_preserves_value() {
         // Run many times to hit both the "skip" and "reduce" random paths.
