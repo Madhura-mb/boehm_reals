@@ -1,4 +1,4 @@
-use super::b_rational::BoundedRational;
+use super::br::BoundedRational;
 use crate::evaluation::constants::{MAX_SIZE, ZERO};
 use crate::{IsizePromotion, UsizePromotion};
 use num_bigint::BigInt;

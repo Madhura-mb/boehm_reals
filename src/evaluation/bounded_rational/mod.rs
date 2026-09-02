@@ -2,9 +2,9 @@
 //! before falling back to constructive-real approximation.
 
 #[macro_use]
-mod macros;
+mod common_arithmetic_macros;
 
 mod add;
-mod b_rational;
+mod br;
 
-pub use b_rational::{BoundedRational, NonFiniteError, ZeroDenominatorError};
+pub use br::{BoundedRational, NonFiniteError, ZeroDenominatorError};
