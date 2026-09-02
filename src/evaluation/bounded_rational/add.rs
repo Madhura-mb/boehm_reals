@@ -1,5 +1,6 @@
 use super::b_rational::BoundedRational;
 use crate::evaluation::constants::{MAX_SIZE, ZERO};
+use crate::{IsizePromotion, UsizePromotion};
 use num_bigint::BigInt;
 use std::iter::Sum;
 use std::mem;
@@ -58,7 +59,7 @@ macro_rules! boundedrational_add {
 }
 
 // -----------------------------------------------------------------------------
-// BoundedRational + BoundedRational
+// BoundedRational Addition Implementation
 // -----------------------------------------------------------------------------
 
 // &BoundedRational + &BoundedRational
@@ -102,14 +103,15 @@ impl Add<BoundedRational> for BoundedRational {
 }
 
 // ============================================================================
-// AddAssign
+// BoundedRational Addition Assignment Implementation
 // ============================================================================
 
 // BoundedRational += &BoundedRational
 impl AddAssign<&BoundedRational> for BoundedRational {
     #[inline]
     fn add_assign(&mut self, other: &BoundedRational) {
-        *self = self.clone() + other;
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + other;
     }
 }
 
@@ -122,40 +124,55 @@ forward_val_assign!(
 // ============================================================================
 // Scalar Addition Implementation
 // ============================================================================
+
+// T = {u8, u16, usize, i8, i16, isize}
+// T + &BoundedRational
+// &T + &BoundedRational
+// BoundedRational + &T
+// &BoundedRational + &T
+// &T + BoundedRational
+// T + BoundedRational
+// &BoundedRational + T
+// BoundedRational + T
 promote_all_scalars!(impl Add for BoundedRational, add);
 
-promote_all_scalars_assign!(impl AddAssign for BoundedRational, add_assign);
-
+// u32 + &BoundedRational
+// &u32 + &BoundedRational
+// BoundedRational + &u32
+// &BoundedRational + &u32
+// u32 + BoundedRational
+// &u32 + BoundedRational
+// &BoundedRational + u32
 forward_all_scalar_binop_to_val_val_commutative!(
     impl Add<u32> for BoundedRational,
     add
 );
 
-forward_all_scalar_binop_to_val_val!(
-    impl Add<u32> for BoundedRational,
-    add
-);
-
+// u64 + &BoundedRational
+// &u64 + &BoundedRational
+// BoundedRational + &u64
+// &BoundedRational + &u64
+// u64 + BoundedRational
+// &u64 + BoundedRational
+// &BoundedRational + u64
 forward_all_scalar_binop_to_val_val_commutative!(
     impl Add<u64> for BoundedRational,
     add
 );
 
-forward_all_scalar_binop_to_val_val!(
-    impl Add<u64> for BoundedRational,
-    add
-);
-
+// u128 + &BoundedRational
+// &u128 + &BoundedRational
+// BoundedRational + &u128
+// &BoundedRational + &u128
+// u128 + BoundedRational
+// &u128 + BoundedRational
+// &BoundedRational + u128
 forward_all_scalar_binop_to_val_val_commutative!(
     impl Add<u128> for BoundedRational,
     add
 );
 
-forward_all_scalar_binop_to_val_val!(
-    impl Add<u128> for BoundedRational,
-    add
-);
-
+// BoundedRational + u32
 impl Add<u32> for BoundedRational {
     type Output = BoundedRational;
 
@@ -165,14 +182,7 @@ impl Add<u32> for BoundedRational {
     }
 }
 
-impl AddAssign<u32> for BoundedRational {
-    #[inline]
-    fn add_assign(&mut self, other: u32) {
-        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
-        *self = n + other;
-    }
-}
-
+// BoundedRational + u64
 impl Add<u64> for BoundedRational {
     type Output = BoundedRational;
 
@@ -182,14 +192,7 @@ impl Add<u64> for BoundedRational {
     }
 }
 
-impl AddAssign<u64> for BoundedRational {
-    #[inline]
-    fn add_assign(&mut self, other: u64) {
-        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
-        *self = n + other;
-    }
-}
-
+// BoundedRational + u128
 impl Add<u128> for BoundedRational {
     type Output = BoundedRational;
 
@@ -199,44 +202,43 @@ impl Add<u128> for BoundedRational {
     }
 }
 
-impl AddAssign<u128> for BoundedRational {
-    #[inline]
-    fn add_assign(&mut self, other: u128) {
-        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
-        *self = n + other;
-    }
-}
-
+// i32 + &BoundedRational
+// &i32 + &BoundedRational
+// BoundedRational + &i32
+// &BoundedRational + &i32
+// i32 + BoundedRational
+// &i32 + BoundedRational
+// &BoundedRational + i32
 forward_all_scalar_binop_to_val_val_commutative!(
     impl Add<i32> for BoundedRational,
     add
 );
 
-forward_all_scalar_binop_to_val_val!(
-    impl Add<i32> for BoundedRational,
-    add
-);
-
+// i64 + &BoundedRational
+// &i64 + &BoundedRational
+// BoundedRational + &i64
+// &BoundedRational + &i64
+// i64 + BoundedRational
+// &i64 + BoundedRational
+// &BoundedRational + i64
 forward_all_scalar_binop_to_val_val_commutative!(
     impl Add<i64> for BoundedRational,
     add
 );
 
-forward_all_scalar_binop_to_val_val!(
-    impl Add<i64> for BoundedRational,
-    add
-);
-
+// i128 + &BoundedRational
+// &i128 + &BoundedRational
+// BoundedRational + &i128
+// &BoundedRational + &i128
+// i128 + BoundedRational
+// &i128 + BoundedRational
+// &BoundedRational + i128
 forward_all_scalar_binop_to_val_val_commutative!(
     impl Add<i128> for BoundedRational,
     add
 );
 
-forward_all_scalar_binop_to_val_val!(
-    impl Add<i128> for BoundedRational,
-    add
-);
-
+// BoundedRational + i32
 impl Add<i32> for BoundedRational {
     type Output = BoundedRational;
 
@@ -246,14 +248,7 @@ impl Add<i32> for BoundedRational {
     }
 }
 
-impl AddAssign<i32> for BoundedRational {
-    #[inline]
-    fn add_assign(&mut self, other: i32) {
-        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
-        *self = n + other;
-    }
-}
-
+// BoundedRational + i64
 impl Add<i64> for BoundedRational {
     type Output = BoundedRational;
 
@@ -263,14 +258,7 @@ impl Add<i64> for BoundedRational {
     }
 }
 
-impl AddAssign<i64> for BoundedRational {
-    #[inline]
-    fn add_assign(&mut self, other: i64) {
-        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
-        *self = n + other;
-    }
-}
-
+// BoundedRational + i128
 impl Add<i128> for BoundedRational {
     type Output = BoundedRational;
 
@@ -280,6 +268,61 @@ impl Add<i128> for BoundedRational {
     }
 }
 
+// ============================================================================
+// Scalar Addition Assignment Implementation
+// ============================================================================
+
+// T = {u8, u16, usize, i8, i16, isize}
+// BoundedRational += T
+// BoundedRational += &T
+promote_all_scalars_assign!(impl AddAssign for BoundedRational, add_assign);
+
+// BoundedRational += u32
+impl AddAssign<u32> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: u32) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + other;
+    }
+}
+
+// BoundedRational += u64
+impl AddAssign<u64> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: u64) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + other;
+    }
+}
+
+// BoundedRational += u128
+impl AddAssign<u128> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: u128) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + other;
+    }
+}
+
+// BoundedRational += i32
+impl AddAssign<i32> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: i32) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + other;
+    }
+}
+
+// BoundedRational += i64
+impl AddAssign<i64> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: i64) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + other;
+    }
+}
+
+// BoundedRational += i128
 impl AddAssign<i128> for BoundedRational {
     #[inline]
     fn add_assign(&mut self, other: i128) {
@@ -288,16 +331,65 @@ impl AddAssign<i128> for BoundedRational {
     }
 }
 
+// BoundedRational += &u32
+impl AddAssign<&u32> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: &u32) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + *other;
+    }
+}
+
+// BoundedRational += &u64
+impl AddAssign<&u64> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: &u64) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + *other;
+    }
+}
+
+// BoundedRational += &u128
+impl AddAssign<&u128> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: &u128) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + *other;
+    }
+}
+
+// BoundedRational += &i32
+impl AddAssign<&i32> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: &i32) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + *other;
+    }
+}
+
+// BoundedRational += &i64
+impl AddAssign<&i64> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: &i64) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + *other;
+    }
+}
+
+// BoundedRational += &i128
+impl AddAssign<&i128> for BoundedRational {
+    #[inline]
+    fn add_assign(&mut self, other: &i128) {
+        let n = mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
+        *self = n + *other;
+    }
+}
+
 // ============================================================================
-// Sum
+// BigInt Addition Implementation
 // ============================================================================
 
-impl_sum_iter_type!(BoundedRational);
-
-// ============================================================================
-// BigInt
-// ============================================================================
-
+// BoundedRational + BigInt
 impl Add<BigInt> for BoundedRational {
     type Output = BoundedRational;
 
@@ -307,6 +399,7 @@ impl Add<BigInt> for BoundedRational {
     }
 }
 
+// BoundedRational + &BigInt
 impl Add<&BigInt> for BoundedRational {
     type Output = BoundedRational;
 
@@ -316,6 +409,7 @@ impl Add<&BigInt> for BoundedRational {
     }
 }
 
+// &BoundedRational + BigInt
 impl Add<BigInt> for &BoundedRational {
     type Output = BoundedRational;
 
@@ -325,6 +419,7 @@ impl Add<BigInt> for &BoundedRational {
     }
 }
 
+// &BoundedRational + &BigInt
 impl Add<&BigInt> for &BoundedRational {
     type Output = BoundedRational;
 
@@ -334,6 +429,7 @@ impl Add<&BigInt> for &BoundedRational {
     }
 }
 
+// BigInt + BoundedRational
 impl Add<BoundedRational> for BigInt {
     type Output = BoundedRational;
 
@@ -343,6 +439,7 @@ impl Add<BoundedRational> for BigInt {
     }
 }
 
+// &BigInt + BoundedRational
 impl Add<BoundedRational> for &BigInt {
     type Output = BoundedRational;
 
@@ -352,6 +449,7 @@ impl Add<BoundedRational> for &BigInt {
     }
 }
 
+// BigInt + &BoundedRational
 impl Add<&BoundedRational> for BigInt {
     type Output = BoundedRational;
 
@@ -361,6 +459,7 @@ impl Add<&BoundedRational> for BigInt {
     }
 }
 
+// &BigInt + &BoundedRational
 impl Add<&BoundedRational> for &BigInt {
     type Output = BoundedRational;
 
@@ -370,40 +469,29 @@ impl Add<&BoundedRational> for &BigInt {
     }
 }
 
+// BoundedRational += BigInt
 impl AddAssign<BigInt> for BoundedRational {
     #[inline]
     fn add_assign(&mut self, other: BigInt) {
         let n = core::mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
-
         *self = n + other;
     }
 }
 
+// BoundedRational += &BigInt
 impl AddAssign<&BigInt> for BoundedRational {
     #[inline]
     fn add_assign(&mut self, other: &BigInt) {
         let n = core::mem::replace(self, BoundedRational::from_bigint(ZERO.clone()));
-
         *self = n + other;
     }
 }
 
-impl AddAssign<BoundedRational> for BigInt {
-    #[inline]
-    fn add_assign(&mut self, other: BoundedRational) {
-        let n = core::mem::replace(self, BigInt::from(0));
-        let sum = BoundedRational::from_bigint(n) + other;
-        *self = sum.numerator() / sum.denominator();
-    }
-}
-impl AddAssign<&BoundedRational> for BigInt {
-    #[inline]
-    fn add_assign(&mut self, other: &BoundedRational) {
-        let n = core::mem::replace(self, BigInt::from(0));
-        let sum = BoundedRational::from_bigint(n) + other.clone();
-        *self = sum.numerator() / sum.denominator();
-    }
-}
+// ============================================================================
+// Sum (iterator)
+// ============================================================================
+
+impl_sum_iter_type!(BoundedRational);
 
 #[cfg(test)]
 mod add_tests {
@@ -859,135 +947,6 @@ mod add_tests {
         let sum2 = (b + a).reduce().positive_den();
         assert_eq!(sum1.numerator(), sum2.numerator());
         assert_eq!(sum1.denominator(), sum2.denominator());
-    }
-
-    // =========================================================================
-    // BigInt: AddAssign — BoundedRational += BigInt (exact, no truncation)
-    // =========================================================================
-
-    #[test]
-    fn add_assign_bigint_val() {
-        let mut a = br(1, 2);
-        a += BigInt::from(3);
-        assert_value(&a, 7, 2);
-    }
-
-    #[test]
-    fn add_assign_bigint_ref() {
-        let mut a = br(1, 2);
-        let b = BigInt::from(3);
-        a += &b;
-        assert_value(&a, 7, 2);
-        assert_eq!(b, BigInt::from(3)); // b still usable
-    }
-
-    #[test]
-    fn add_assign_bigint_negative() {
-        let mut a = br(1, 2);
-        a += BigInt::from(-3);
-        assert_value(&a, -5, 2);
-    }
-
-    #[test]
-    fn add_assign_bigint_preserves_fraction_exactly() {
-        // Confirms no truncation happens in this direction
-        let mut a = br(1, 3);
-        a += BigInt::from(1);
-        assert_value(&a, 4, 3);
-    }
-
-    #[test]
-    fn add_assign_bigint_zero_is_noop() {
-        let mut a = br(5, 7);
-        a += BigInt::from(0);
-        assert_value(&a, 5, 7);
-    }
-
-    // =========================================================================
-    // BigInt: AddAssign — BigInt += BoundedRational (TRUNCATING direction)
-    // =========================================================================
-
-    #[test]
-    fn bigint_add_assign_boundedrational_integer_result() {
-        // 5 + 3 = 8, exact integer, no truncation needed
-        let mut a = BigInt::from(5);
-        a += br(3, 1);
-        assert_eq!(a, BigInt::from(8));
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_truncates_positive_fraction() {
-        // 5 + 1/2 = 5.5 -> truncates toward zero -> 5
-        let mut a = BigInt::from(5);
-        a += br(1, 2);
-        assert_eq!(a, BigInt::from(5));
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_truncates_negative_fraction() {
-        // -5 + -1/2 = -5.5 -> truncates toward zero -> -5 (not -6)
-        let mut a = BigInt::from(-5);
-        a += br(-1, 2);
-        assert_eq!(a, BigInt::from(-5));
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_ref_variant() {
-        let mut a = BigInt::from(5);
-        let b = br(1, 2);
-        a += &b;
-        assert_eq!(a, BigInt::from(5));
-        assert_value(&b, 1, 2); // b still usable
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_exact_fraction_cancels() {
-        // 5 + (-5) exactly = 0
-        let mut a = BigInt::from(5);
-        a += br(-5, 1);
-        assert_eq!(a, BigInt::from(0));
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_fraction_that_completes_to_integer() {
-        // 5 + 1/2 + 1/2 (done in two steps) should behave consistently
-        // First step truncates (5.5 -> 5), so the second +0.5 doesn't "recover" the lost half.
-        let mut a = BigInt::from(5);
-        a += br(1, 2);
-        assert_eq!(a, BigInt::from(5)); // truncated already
-        a += br(1, 2);
-        assert_eq!(a, BigInt::from(5)); // 5 + 0.5 = 5.5 -> truncates to 5 again
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_small_negative_fraction_near_zero() {
-        // 0 + (-1/2) = -0.5 -> truncates toward zero -> 0, not -1
-        let mut a = BigInt::from(0);
-        a += br(-1, 2);
-        assert_eq!(a, BigInt::from(0));
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_zero_operand() {
-        let mut a = BigInt::from(42);
-        a += br(0, 1);
-        assert_eq!(a, BigInt::from(42));
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_large_fraction() {
-        // 0 + 7/2 = 3.5 -> truncates toward zero -> 3
-        let mut a = BigInt::from(0);
-        a += br(7, 2);
-        assert_eq!(a, BigInt::from(3));
-    }
-
-    #[test]
-    fn bigint_add_assign_boundedrational_large_negative_fraction() {
-        // 0 + -7/2 = -3.5 -> truncates toward zero -> -3
-        let mut a = BigInt::from(0);
-        a += br(-7, 2);
-        assert_eq!(a, BigInt::from(-3));
     }
 
     // =========================================================================

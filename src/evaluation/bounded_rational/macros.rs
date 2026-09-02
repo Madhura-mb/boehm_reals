@@ -1,14 +1,14 @@
 #![allow(unused_macros)]
-/// Forwards an owned assignment operation to its reference implementation.
+
+/// Forwards an owned-value assignment to the reference-based implementation.
 ///
-/// For example:
+/// Generates:
+///     T op= T
+/// by forwarding to:
+///     T op= &T
 ///
-/// ```ignore
-/// forward_val_assign!(impl AddAssign for BoundedRational, add_assign);
-/// ```
-///
-/// generates the `BoundedRational += BoundedRational` implementation
-/// from the already implemented `BoundedRational += &BoundedRational`.
+/// The existing `&T` implementation contains the actual logic, so the
+/// owned-value implementation only needs to borrow `other`.
 macro_rules! forward_val_assign {
     (impl $imp:ident for $res:ty, $method:ident) => {
         impl $imp<$res> for $res {
@@ -20,179 +20,168 @@ macro_rules! forward_val_assign {
     };
 }
 
-/// Generates `Add` implementations for smaller scalar types by promoting
-/// them to a larger scalar type.
+/// Generates scalar implementations using a promoted scalar type.
 ///
-/// The promoted implementation must already exist.
+/// For every `$scalar`, generates:
+///     T op scalar
+///     scalar op T
+/// and forwards reference combinations through
+/// `forward_all_scalar_binop_to_val_val!`.
 ///
-/// For example:
+/// The scalar is converted:
+///     scalar -> promo
 ///
-/// ```ignore
-/// promote_scalars!(impl Add<u32> for BoundedRational, add, u8, u16);
-/// ```
-///
-/// generates `BoundedRational + u8` and `BoundedRational + u16` by
-/// converting those values to `u32`.
+/// The actual operation is then delegated to an implementation involving
+/// the promoted scalar type.
 macro_rules! promote_scalars {
-    (
-        impl $imp:ident<$promo:ty> for $res:ty,
-        $method:ident,
-        $($scalar:ty),*
-    ) => {
+    (impl $imp:ident<$promo:ty> for $res:ty, $method:ident, $( $scalar:ty ),*) => {
         $(
-            forward_all_scalar_binop_to_val_val!(
-                impl $imp<$scalar> for $res,
-                $method
-            );
+            forward_all_scalar_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
 
             impl $imp<$scalar> for $res {
                 type Output = $res;
 
+                #[allow(clippy::cast_lossless)]
                 #[inline]
                 fn $method(self, other: $scalar) -> $res {
                     $imp::$method(self, other as $promo)
                 }
             }
+
+            impl $imp<$res> for $scalar {
+                type Output = $res;
+
+                #[allow(clippy::cast_lossless)]
+                #[inline]
+                fn $method(self, other: $res) -> $res {
+                    $imp::$method(self as $promo, other)
+                }
+            }
         )*
-    };
+    }
 }
 
-/// Generates `AddAssign` implementations for smaller scalar types by
-/// promoting them to a larger scalar type.
+/// Generates scalar assignment implementations.
 ///
-/// The promoted implementation must already exist.
+/// For every `$scalar`, generates:
+///     T op= scalar
+/// And for every `$scalar`, generates:
+///     T op= &scalar
+/// The scalar is converted:
+///     scalar -> promo
+/// and forwarded to the existing assignment implementation.
 macro_rules! promote_scalars_assign {
-    (
-        impl $imp:ident<$promo:ty> for $res:ty,
-        $method:ident,
-        $($scalar:ty),*
-    ) => {
+    (impl $imp:ident<$promo:ty> for $res:ty, $method:ident, $( $scalar:ty ),*) => {
         $(
             impl $imp<$scalar> for $res {
+                #[allow(clippy::cast_lossless)]
                 #[inline]
                 fn $method(&mut self, other: $scalar) {
                     self.$method(other as $promo);
                 }
             }
+
+            impl $imp<&$scalar> for $res {
+                #[allow(clippy::cast_lossless)]
+                #[inline]
+                fn $method(&mut self, other: &$scalar) {
+                    self.$method(*other as $promo);
+                }
+            }
         )*
-    };
+    }
 }
 
-/// Promotes unsigned scalar types.
+/// Expands `promote_scalars!` for unsigned scalar types.
 ///
-/// `u8` and `u16` are promoted to `u32`.
-/// `usize` is promoted to `u64`.
+/// Generates support for:
+///     T op u8
+///     T op u16
+///     T op usize
+/// and the corresponding reverse/reference combinations.
 macro_rules! promote_unsigned_scalars {
     (impl $imp:ident for $res:ty, $method:ident) => {
-        promote_scalars!(
-            impl $imp<u32> for $res,
-            $method,
-            u8,
-            u16
-        );
-
-        promote_scalars!(
-            impl $imp<u64> for $res,
-            $method,
-            usize
-        );
-    };
+        promote_scalars!(impl $imp<u32> for $res, $method, u8, u16);
+        promote_scalars!(impl $imp<UsizePromotion> for $res, $method, usize);
+    }
 }
 
-/// Promotes unsigned scalar types for assignment operations.
+/// Expands `promote_scalars_assign!` for unsigned scalar types.
+///
+/// Generates:
+///     T op= u8
+///     T op= u16
+///     T op= usize
 macro_rules! promote_unsigned_scalars_assign {
     (impl $imp:ident for $res:ty, $method:ident) => {
-        promote_scalars_assign!(
-            impl $imp<u32> for $res,
-            $method,
-            u8,
-            u16
-        );
-
-        promote_scalars_assign!(
-            impl $imp<u64> for $res,
-            $method,
-            usize
-        );
-    };
+        promote_scalars_assign!(impl $imp<u32> for $res, $method, u8, u16);
+        promote_scalars_assign!(impl $imp<UsizePromotion> for $res, $method, usize);
+    }
 }
 
-/// Promotes signed scalar types.
+/// Expands `promote_scalars!` for signed scalar types.
 ///
-/// `i8` and `i16` are promoted to `i32`.
-/// `isize` is promoted to `i64`.
+/// Generates support for:
+///     T op i8
+///     T op i16
+///     T op isize
+/// and the corresponding reverse/reference combinations.
 macro_rules! promote_signed_scalars {
     (impl $imp:ident for $res:ty, $method:ident) => {
-        promote_scalars!(
-            impl $imp<i32> for $res,
-            $method,
-            i8,
-            i16
-        );
-
-        promote_scalars!(
-            impl $imp<i64> for $res,
-            $method,
-            isize
-        );
-    };
+        promote_scalars!(impl $imp<i32> for $res, $method, i8, i16);
+        promote_scalars!(impl $imp<IsizePromotion> for $res, $method, isize);
+    }
 }
 
-/// Promotes signed scalar types for assignment operations.
+/// Expands `promote_scalars_assign!` for signed scalar types.
+///
+/// Generates:
+///     T op= i8
+///     T op= i16
+///     T op= isize
 macro_rules! promote_signed_scalars_assign {
     (impl $imp:ident for $res:ty, $method:ident) => {
-        promote_scalars_assign!(
-            impl $imp<i32> for $res,
-            $method,
-            i8,
-            i16
-        );
-
-        promote_scalars_assign!(
-            impl $imp<i64> for $res,
-            $method,
-            isize
-        );
-    };
+        promote_scalars_assign!(impl $imp<i32> for $res, $method, i8, i16);
+        promote_scalars_assign!(impl $imp<IsizePromotion> for $res, $method, isize);
+    }
 }
 
-/// Promotes all unsigned and signed scalar types.
+/// Combines signed and unsigned scalar implementations.
+///
+/// Expands:
+///     promote_unsigned_scalars!
+///     promote_signed_scalars!
 macro_rules! promote_all_scalars {
     (impl $imp:ident for $res:ty, $method:ident) => {
-        promote_unsigned_scalars!(
-            impl $imp for $res,
-            $method
-        );
-
-        promote_signed_scalars!(
-            impl $imp for $res,
-            $method
-        );
-    };
+        promote_unsigned_scalars!(impl $imp for $res, $method);
+        promote_signed_scalars!(impl $imp for $res, $method);
+    }
 }
 
-/// Promotes all unsigned and signed scalar types for assignment operations.
+/// Combines signed and unsigned scalar assignment implementations.
+///
+/// Expands:
+///     promote_unsigned_scalars_assign!
+///     promote_signed_scalars_assign!
 macro_rules! promote_all_scalars_assign {
     (impl $imp:ident for $res:ty, $method:ident) => {
-        promote_unsigned_scalars_assign!(
-            impl $imp for $res,
-            $method
-        );
-
-        promote_signed_scalars_assign!(
-            impl $imp for $res,
-            $method
-        );
-    };
+        promote_unsigned_scalars_assign!(impl $imp for $res, $method);
+        promote_signed_scalars_assign!(impl $imp for $res, $method);
+    }
 }
 
-/// Forwards a scalar/value operation to the corresponding value/value
-/// implementation.
+/// Generates the reverse owned-value combination for a commutative operation.
+///
+/// Given:
+///     T op scalar
+/// generates:
+///     scalar op T
+/// by forwarding to:
+///     T op scalar
+///
+/// Use only when reversing the operands preserves the result.
 macro_rules! forward_scalar_val_val_binop_commutative {
-    (
-        impl $imp:ident<$scalar:ty> for $res:ty,
-        $method:ident
-    ) => {
+    (impl $imp:ident < $scalar:ty > for $res:ty, $method:ident) => {
         impl $imp<$res> for $scalar {
             type Output = $res;
 
@@ -204,31 +193,16 @@ macro_rules! forward_scalar_val_val_binop_commutative {
     };
 }
 
-/// Generates all reference combinations of `res op scalar` from the
-/// already implemented `res op scalar` (value/value) operation.
+/// Forwards combinations containing a scalar reference.
 ///
-/// This includes:
-///
-/// - `&BoundedRational + scalar`
-/// - `BoundedRational + &scalar`
-/// - `&BoundedRational + &scalar`
-///
-/// Unlike `forward_all_scalar_binop_to_val_val_commutative!`, this does
-/// NOT generate `scalar + BoundedRational` implementations.
-macro_rules! forward_all_scalar_binop_to_val_val {
-    (
-        impl $imp:ident<$scalar:ty> for $res:ty,
-        $method:ident
-    ) => {
-        impl $imp<$scalar> for &$res {
-            type Output = $res;
-
-            #[inline]
-            fn $method(self, other: $scalar) -> $res {
-                $imp::$method(self.clone(), other)
-            }
-        }
-
+/// Generates:
+///     T op &scalar
+///     &scalar  op T
+/// by forwarding to:
+///     T op scalar
+///     scalar op T
+macro_rules! forward_scalar_val_ref_binop_to_val_val {
+    (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => {
         impl $imp<&$scalar> for $res {
             type Output = $res;
 
@@ -238,6 +212,56 @@ macro_rules! forward_all_scalar_binop_to_val_val {
             }
         }
 
+        impl $imp<$res> for &$scalar {
+            type Output = $res;
+
+            #[inline]
+            fn $method(self, other: $res) -> $res {
+                $imp::$method(*self, other)
+            }
+        }
+    };
+}
+
+/// Forwards combinations containing a reference to the result type.
+///
+/// Generates:
+///     &T op scalar
+///     scalar op &T
+/// by converting `&T` to `T` using `clone()`.
+macro_rules! forward_scalar_ref_val_binop_to_val_val {
+    (impl $imp:ident < $scalar:ty > for $res:ty, $method:ident) => {
+        impl $imp<$scalar> for &$res {
+            type Output = $res;
+
+            #[inline]
+            fn $method(self, other: $scalar) -> $res {
+                $imp::$method(self.clone(), other)
+            }
+        }
+
+        impl $imp<&$res> for $scalar {
+            type Output = $res;
+
+            #[inline]
+            fn $method(self, other: &$res) -> $res {
+                $imp::$method(self, other.clone())
+            }
+        }
+    };
+}
+
+/// Forwards combinations where both operands are references.
+///
+/// Generates:
+///     &T op &scalar
+///     &scalar op &T
+/// by converting:
+///     &T      -> T
+///     &scalar -> scalar
+/// and forwarding to the corresponding owned-value implementation.
+macro_rules! forward_scalar_ref_ref_binop_to_val_val {
+    (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => {
         impl $imp<&$scalar> for &$res {
             type Output = $res;
 
@@ -246,63 +270,71 @@ macro_rules! forward_all_scalar_binop_to_val_val {
                 $imp::$method(self.clone(), *other)
             }
         }
-    };
-}
-
-/// Generates all scalar/value combinations for a commutative operation.
-///
-/// This includes:
-///
-/// - `scalar + BoundedRational`
-/// - `scalar + &BoundedRational`
-/// - `&scalar + BoundedRational`
-/// - `&scalar + &BoundedRational`
-macro_rules! forward_all_scalar_binop_to_val_val_commutative {
-    (
-        impl $imp:ident<$scalar:ty> for $res:ty,
-        $method:ident
-    ) => {
-        forward_scalar_val_val_binop_commutative!(
-            impl $imp<$scalar> for $res,
-            $method
-        );
-
-        impl $imp<&$res> for $scalar {
-            type Output = $res;
-
-            #[inline]
-            fn $method(self, other: &$res) -> $res {
-                $imp::$method(other.clone(), self)
-            }
-        }
-
-        impl $imp<$res> for &$scalar {
-            type Output = $res;
-
-            #[inline]
-            fn $method(self, other: $res) -> $res {
-                $imp::$method(other, *self)
-            }
-        }
 
         impl $imp<&$res> for &$scalar {
             type Output = $res;
 
             #[inline]
             fn $method(self, other: &$res) -> $res {
-                $imp::$method(other.clone(), *self)
+                $imp::$method(*self, other.clone())
             }
         }
     };
 }
 
-/// Implements `Sum` for a result type for every input type that can be
-/// added to it.
+/// Combines all scalar/reference forwarding combinations.
 ///
-/// The result type must provide a zero value.
+/// Expands:
+///     T op &scalar
+///     &scalar op T
+///     &T op scalar
+///     scalar op &T
+///     &T op &scalar
+///     &scalar op &T
 ///
-/// This is equivalent in purpose to `num-bigint`'s `impl_sum_iter_type!`,
-/// which starts the fold from its zero value. :contentReference[oaicite:2]{index=2}
+/// All combinations are forwarded to the corresponding owned-value
+/// implementations.
+macro_rules! forward_all_scalar_binop_to_val_val {
+    (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => {
+        forward_scalar_val_ref_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+        forward_scalar_ref_val_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+        forward_scalar_ref_ref_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+    }
+}
+
+/// Combines commutative forwarding with scalar/reference forwarding.
+///
+/// Generates:
+///     scalar op T
+///     T op &scalar
+///     &scalar op T
+///     &T op scalar
+///     scalar op &T
+///     &T op &scalar
+///     &scalar op &T
+///
+/// The reverse owned-value combination:
+///     scalar op T
+/// is generated using `forward_scalar_val_val_binop_commutative!`.
+macro_rules! forward_all_scalar_binop_to_val_val_commutative {
+    (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => {
+        forward_scalar_val_val_binop_commutative!(impl $imp<$scalar> for $res, $method);
+        forward_all_scalar_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+    }
+}
+
+/// Implements `Sum` for `$res`.
+/// The iterator item type is `T`.
+///
+/// Requires:
+///     $res: Add<T, Output = $res>
+/// Starts with:
+///     $res::from_bigint(ZERO.clone())
+/// and folds:
+///     zero
+///     zero op item1
+///     (zero op item1) op item2
+///     ...
 macro_rules! impl_sum_iter_type {
     ($res:ty) => {
         impl<T> Sum<T> for $res
