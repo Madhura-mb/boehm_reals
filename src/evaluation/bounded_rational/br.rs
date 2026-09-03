@@ -6,6 +6,7 @@ use num_traits::ToPrimitive;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
+use std::ops::Add;
 
 /// Error returned when a `BoundedRational` is constructed with a zero denominator.
 #[derive(Clone, Debug)]
@@ -215,16 +216,14 @@ impl BoundedRational {
     /// [`reduce`]: BoundedRational::reduce
     /// [`positive_den`]: BoundedRational::positive_den
     /// [`too_big`]: BoundedRational::too_big
-    pub fn maybe_reduce(r: Option<BoundedRational>) -> Option<BoundedRational> {
-        let r = r?; // propagate None immediately
-
+    pub fn maybe_reduce(r: BoundedRational) -> BoundedRational {
         let should_reduce = r.too_big() || (rand::rng().next_u32() & 0xf) == 0;
 
         if !should_reduce {
-            return Some(r);
+            return r;
         }
 
-        Some(r.positive_den().reduce())
+        r.positive_den().reduce()
     }
 
     ///Converts an `i64` into a `BoundedRational`.
@@ -333,72 +332,15 @@ impl BoundedRational {
     }
 
     /// Returns the argument, but with the opposite sign.
-    /// Returns `None` only for a `None` argument.
-    pub fn negate(r: Option<BoundedRational>) -> Option<BoundedRational> {
-        let r = r?; // propagate None immediately
-        Some(BoundedRational {
+    pub fn negate(r: BoundedRational) -> BoundedRational {
+        BoundedRational {
             numerator: -r.numerator,
             denominator: r.denominator,
-        })
+        }
     }
 
-    /// Returns the sum of `r1` and `r2`, possibly reduces.
-    /// Returns `None` if either argument is `None`.
-    ///
-    /// If either operand is exactly zero, the other operand is returned
-    /// unchanged (aside from being passed through [`maybe_reduce`]), avoiding
-    /// unnecessary cross multiplication work entirely.
-    ///
-    /// Before performing the addition, this function may reduce both operands
-    /// when their combined bit size is large. This heuristic helps avoid
-    /// creating unnecessarily large intermediate numerators and denominators
-    /// during cross multiplication while preserving the final value.
-    ///
-    /// The resulting fraction is passed through [`maybe_reduce`] to keep its
-    /// size within the configured bounds when possible.
-    pub fn add(
-        r1: Option<BoundedRational>,
-        r2: Option<BoundedRational>,
-    ) -> Option<BoundedRational> {
-        let r1 = r1?; // propagate None immediately
-        let r2 = r2?; // propagate None immediately
-
-        // Zero check: adding zero is a no-op, so just return the other operand.
-        if r1.numerator == *ZERO {
-            return BoundedRational::maybe_reduce(Some(r2));
-        }
-        if r2.numerator == *ZERO {
-            return BoundedRational::maybe_reduce(Some(r1));
-        }
-
-        // Heuristic: if sum of input bit sizes is already close to MAX_SIZE,
-        // reduce inputs first to avoid huge intermediates
-        let input_bits = r1.numerator.bits()
-            + r1.denominator.bits()
-            + r2.numerator.bits()
-            + r2.denominator.bits();
-
-        let (r1, r2) = if input_bits > (MAX_SIZE as u64 * 3 / 4) {
-            // Reduce both inputs before multiplying
-            (r1.reduce().positive_den(), r2.reduce().positive_den())
-        } else {
-            (r1, r2)
-        };
-
-        let den = &r1.denominator * &r2.denominator;
-        let num = &r1.numerator * &r2.denominator + &r1.denominator * &r2.numerator;
-
-        BoundedRational::maybe_reduce(Some(BoundedRational {
-            numerator: num,
-            denominator: den,
-        }))
-    }
-
-    /// Returns `r1 - r2`. Returns `None` if either argument is `None`.
-    pub fn subtract(
-        r1: Option<BoundedRational>,
-        r2: Option<BoundedRational>,
-    ) -> Option<BoundedRational> {
+    /// Returns `r1 - r2`.
+    pub fn subtract(r1: BoundedRational, r2: BoundedRational) -> BoundedRational {
         BoundedRational::add(r1, BoundedRational::negate(r2))
     }
 
@@ -438,35 +380,24 @@ impl BoundedRational {
     /// is skipped, since a second reduction pass would be redundant. When the
     /// threshold is not exceeded, `maybe_reduce` is called on the raw product
     /// as usual.
-    ///
-    /// # None propagation
-    /// `None` input on either side -> `None` output immediately. A `None`
-    /// here may represent a value that was too large to keep as an exact
-    /// rational, so it is never silently treated as zero or one.
-    pub fn multiply(
-        r1: Option<BoundedRational>,
-        r2: Option<BoundedRational>,
-    ) -> Option<BoundedRational> {
-        let r1 = r1?; // propagate None immediately
-        let r2 = r2?; // propagate None immediately
-
+    pub fn multiply(r1: BoundedRational, r2: BoundedRational) -> BoundedRational {
         if r1.equals(&ONE) {
-            return Some(r2);
+            return r2;
         }
         if r2.equals(&ONE) {
-            return Some(r1);
+            return r1;
         }
         if r1.equals(&MINUS_ONE) {
-            return Some(BoundedRational {
+            return BoundedRational {
                 numerator: -r2.numerator,
                 denominator: r2.denominator,
-            });
+            };
         }
         if r2.equals(&MINUS_ONE) {
-            return Some(BoundedRational {
+            return BoundedRational {
                 numerator: -r1.numerator,
                 denominator: r1.denominator,
-            });
+            };
         }
 
         let threshold = MAX_SIZE as u64 * 3 / 4;
@@ -487,10 +418,10 @@ impl BoundedRational {
                 (r1, r2, false)
             };
 
-        let result = Some(BoundedRational {
+        let result = BoundedRational {
             numerator: &r1.numerator * &r2.numerator,
             denominator: &r1.denominator * &r2.denominator,
-        });
+        };
 
         if already_reduced {
             result
@@ -502,27 +433,17 @@ impl BoundedRational {
     /// Returns the reciprocal of `r`, formed by swapping numerator and
     /// denominator.
     ///
-    /// # None propagation
-    /// `None` input -> `Ok(None)` output immediately; no zero check is
-    /// performed in that case since there is no value to inspect.
-    ///
     /// # Errors
     /// Returns `Err(ZeroDivisionError)` if `r`'s numerator is zero, since
     /// the resulting denominator would be zero.
-    pub fn inverse(
-        r: Option<BoundedRational>,
-    ) -> Result<Option<BoundedRational>, ZeroDivisionError> {
-        let r = match r {
-            Some(r) => r,
-            None => return Ok(None),
-        };
+    pub fn inverse(r: BoundedRational) -> Result<BoundedRational, ZeroDivisionError> {
         if r.numerator == *ZERO {
             return Err(ZeroDivisionError);
         }
-        Ok(Some(BoundedRational {
+        Ok(BoundedRational {
             numerator: r.denominator,
             denominator: r.numerator,
-        }))
+        })
     }
 
     /// Returns `r1 / r2`, computed as `r1 * inverse(r2)`.
@@ -530,9 +451,9 @@ impl BoundedRational {
     /// # Errors
     /// Returns `Err(ZeroDivisionError)` if `r2` is zero.
     pub fn divide(
-        r1: Option<BoundedRational>,
-        r2: Option<BoundedRational>,
-    ) -> Result<Option<BoundedRational>, ZeroDivisionError> {
+        r1: BoundedRational,
+        r2: BoundedRational,
+    ) -> Result<BoundedRational, ZeroDivisionError> {
         Ok(BoundedRational::multiply(r1, BoundedRational::inverse(r2)?))
     }
 
@@ -1218,28 +1139,24 @@ mod tests {
 
     // ── maybe_reduce ─────────────────────────────────────────────────────────
 
-    /// Acceptance criterion: maybe_reduce(None) returns None
-    #[test]
-    fn maybe_reduce_none_returns_none() {
-        assert!(BoundedRational::maybe_reduce(None).is_none());
-    }
-
     #[test]
     fn maybe_reduce_small_fraction_preserves_value() {
         // Run many times to hit both the "skip" and "reduce" random paths.
         for _ in 0..100 {
             let r = BoundedRational::from_longs(6, 4).unwrap();
-            if let Some(result) = BoundedRational::maybe_reduce(Some(r)) {
-                // Value must still equal 1.5 regardless of which path was taken.
-                let num: f64 = result.numerator().to_string().parse().unwrap();
-                let den: f64 = result.denominator().to_string().parse().unwrap();
-                assert!(
-                    (num / den - 1.5).abs() < 1e-10,
-                    "Value changed: {}/{}",
-                    result.numerator(),
-                    result.denominator()
-                );
-            }
+
+            let result = BoundedRational::maybe_reduce(r);
+
+            // Value must still equal 1.5 regardless of which path was taken.
+            let num: f64 = result.numerator().to_string().parse().unwrap();
+            let den: f64 = result.denominator().to_string().parse().unwrap();
+
+            assert!(
+                (num / den - 1.5).abs() < 1e-10,
+                "Value changed: {}/{}",
+                result.numerator(),
+                result.denominator()
+            );
         }
     }
 
@@ -1420,14 +1337,9 @@ mod tests {
     // ── negate ─────────────────────────────────────────────────────────────────
 
     #[test]
-    fn negate_none() {
-        assert!(BoundedRational::negate(None).is_none());
-    }
-
-    #[test]
     fn negate_positive_fraction() {
         let r = BoundedRational::from_longs(3, 4).unwrap();
-        let neg = BoundedRational::negate(Some(r)).unwrap();
+        let neg = BoundedRational::negate(r);
 
         assert_eq!(neg.numerator(), &BigInt::from(-3));
         assert_eq!(neg.denominator(), &BigInt::from(4));
@@ -1436,7 +1348,7 @@ mod tests {
     #[test]
     fn negate_negative_fraction() {
         let r = BoundedRational::from_longs(-5, 10).unwrap();
-        let neg = BoundedRational::negate(Some(r)).unwrap();
+        let neg = BoundedRational::negate(r);
 
         assert_eq!(neg.numerator(), &BigInt::from(5));
         assert_eq!(neg.denominator(), &BigInt::from(10));
@@ -1445,15 +1357,10 @@ mod tests {
     // ── add ──────────────────────────────────────────────────────────────────
 
     #[test]
-    fn add_none_both() {
-        assert!(BoundedRational::add(None, None).is_none());
-    }
-
-    #[test]
     fn add_basic_fractions() {
         let r1 = BoundedRational::from_longs(1, 2).unwrap();
         let r2 = BoundedRational::from_longs(1, 3).unwrap();
-        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+        let sum = BoundedRational::add(r1, r2).reduce();
 
         assert_eq!(sum.numerator(), &BigInt::from(5));
         assert_eq!(sum.denominator(), &BigInt::from(6));
@@ -1463,7 +1370,7 @@ mod tests {
     fn add_same_denominator_reduces() {
         let r1 = BoundedRational::from_longs(1, 4).unwrap();
         let r2 = BoundedRational::from_longs(1, 4).unwrap();
-        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+        let sum = BoundedRational::add(r1, r2).reduce();
 
         assert_eq!(sum.numerator(), &BigInt::from(1));
         assert_eq!(sum.denominator(), &BigInt::from(2));
@@ -1473,7 +1380,7 @@ mod tests {
     fn add_different_denominator_reduces() {
         let r1 = BoundedRational::from_longs(1, 3).unwrap();
         let r2 = BoundedRational::from_longs(1, 6).unwrap();
-        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+        let sum = BoundedRational::add(r1, r2).reduce();
 
         assert_eq!(sum.numerator(), &BigInt::from(1));
         assert_eq!(sum.denominator(), &BigInt::from(2));
@@ -1483,10 +1390,7 @@ mod tests {
     fn add_with_negative_denominator() {
         let r1 = BoundedRational::from_longs(1, -2).unwrap();
         let r2 = BoundedRational::from_longs(1, 3).unwrap();
-        let sum = BoundedRational::add(Some(r1), Some(r2))
-            .unwrap()
-            .positive_den()
-            .reduce();
+        let sum = BoundedRational::add(r1, r2).positive_den().reduce();
 
         assert_eq!(sum.numerator(), &BigInt::from(-1));
         assert_eq!(sum.denominator(), &BigInt::from(6));
@@ -1499,7 +1403,7 @@ mod tests {
 
         let r1 = BoundedRational::new(factor.clone() * 2u32, factor.clone()).unwrap();
         let r2 = BoundedRational::new(factor.clone() * 3u32, factor).unwrap();
-        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+        let sum = BoundedRational::add(r1, r2).reduce();
 
         assert_eq!(sum.numerator(), &BigInt::from(5));
         assert_eq!(sum.denominator(), &BigInt::from(1));
@@ -1509,7 +1413,7 @@ mod tests {
     fn add_zero_right_returns_left() {
         let r1 = BoundedRational::from_longs(3, 7).unwrap();
         let r2 = BoundedRational::from_longs(0, 1).unwrap();
-        let sum = BoundedRational::add(Some(r1), Some(r2)).unwrap().reduce();
+        let sum = BoundedRational::add(r1, r2).reduce();
 
         assert_eq!(sum.numerator(), &BigInt::from(3));
         assert_eq!(sum.denominator(), &BigInt::from(7));
@@ -1521,10 +1425,7 @@ mod tests {
         // short-circuit correctly and not corrupt the sign of the result.
         let r1 = BoundedRational::from_longs(0, -1).unwrap();
         let r2 = BoundedRational::from_longs(1, -2).unwrap();
-        let sum = BoundedRational::add(Some(r1), Some(r2))
-            .unwrap()
-            .positive_den()
-            .reduce();
+        let sum = BoundedRational::add(r1, r2).positive_den().reduce();
 
         assert_eq!(sum.numerator(), &BigInt::from(-1));
         assert_eq!(sum.denominator(), &BigInt::from(2));
@@ -1533,16 +1434,10 @@ mod tests {
     // ── subtract ────────────────────────────────────────────────────────────────
 
     #[test]
-    fn subtract_none_r1() {
-        let r2 = BoundedRational::from_long(1);
-        assert!(BoundedRational::subtract(None, Some(r2)).is_none());
-    }
-
-    #[test]
     fn subtract_from_zero() {
         let r1 = BoundedRational::from_long(0);
         let r2 = BoundedRational::from_longs(1, 2).unwrap();
-        let diff = BoundedRational::subtract(Some(r1), Some(r2)).unwrap();
+        let diff = BoundedRational::subtract(r1, r2);
 
         assert_eq!(diff.numerator(), &BigInt::from(-1));
         assert_eq!(diff.denominator(), &BigInt::from(2));
@@ -1555,12 +1450,8 @@ mod tests {
         let r1 = BoundedRational::from_longs(7, 9).unwrap();
         let r2 = BoundedRational::from_longs(2, 5).unwrap();
 
-        let via_subtract = BoundedRational::subtract(Some(r1.clone()), Some(r2.clone()))
-            .unwrap()
-            .reduce();
-        let via_add_negate = BoundedRational::add(Some(r1), BoundedRational::negate(Some(r2)))
-            .unwrap()
-            .reduce();
+        let via_subtract = BoundedRational::subtract(r1.clone(), r2.clone()).reduce();
+        let via_add_negate = BoundedRational::add(r1, BoundedRational::negate(r2)).reduce();
 
         assert_eq!(via_subtract.numerator(), via_add_negate.numerator());
         assert_eq!(via_subtract.denominator(), via_add_negate.denominator());
@@ -1572,10 +1463,7 @@ mod tests {
     fn multiply_basic() {
         let r1 = BoundedRational::from_longs(2, 3).unwrap();
         let r2 = BoundedRational::from_longs(3, 4).unwrap();
-        let prod = BoundedRational::multiply(Some(r1), Some(r2))
-            .unwrap()
-            .reduce()
-            .positive_den();
+        let prod = BoundedRational::multiply(r1, r2).reduce().positive_den();
         // unreduced: (2*3)/(3*4) = 6/12 = 1/2
         assert_eq!(prod.numerator(), &BigInt::from(1));
         assert_eq!(prod.denominator(), &BigInt::from(2));
@@ -1585,23 +1473,16 @@ mod tests {
     fn multiply_one_shortcut_right() {
         let r1 = BoundedRational::from_longs(5, 7).unwrap();
         let one = BoundedRational::value_of_long(1);
-        let prod = BoundedRational::multiply(Some(r1), Some(one)).unwrap();
+        let prod = BoundedRational::multiply(r1, one);
         assert_eq!(prod.numerator(), &BigInt::from(5));
         assert_eq!(prod.denominator(), &BigInt::from(7));
-    }
-
-    #[test]
-    fn multiply_none_propagates_left() {
-        let r2 = BoundedRational::from_longs(3, 4).unwrap();
-        let prod = BoundedRational::multiply(None, Some(r2));
-        assert!(prod.is_none());
     }
 
     #[test]
     fn multiply_by_zero() {
         let r1 = BoundedRational::from_long(0);
         let r2 = BoundedRational::from_longs(5, 9).unwrap();
-        let prod = BoundedRational::multiply(Some(r1), Some(r2)).unwrap();
+        let prod = BoundedRational::multiply(r1, r2);
         assert_eq!(prod.numerator(), &BigInt::from(0));
     }
 
@@ -1609,10 +1490,7 @@ mod tests {
     fn multiply_reduces_to_lowest_terms() {
         let r1 = BoundedRational::from_longs(2, 3).unwrap();
         let r2 = BoundedRational::from_longs(3, 4).unwrap();
-        let prod = BoundedRational::multiply(Some(r1), Some(r2))
-            .unwrap()
-            .reduce()
-            .positive_den();
+        let prod = BoundedRational::multiply(r1, r2).reduce().positive_den();
         assert_eq!(prod.numerator(), &BigInt::from(1));
         assert_eq!(prod.denominator(), &BigInt::from(2));
     }
@@ -1621,10 +1499,7 @@ mod tests {
     fn multiply_negative_values() {
         let r1 = BoundedRational::from_longs(-2, 3).unwrap();
         let r2 = BoundedRational::from_longs(3, 4).unwrap();
-        let prod = BoundedRational::multiply(Some(r1), Some(r2))
-            .unwrap()
-            .reduce()
-            .positive_den();
+        let prod = BoundedRational::multiply(r1, r2).reduce().positive_den();
         // (-2/3) * (3/4) = -6/12 = -1/2
         assert_eq!(prod.numerator(), &BigInt::from(-1));
         assert_eq!(prod.denominator(), &BigInt::from(2));
@@ -1635,7 +1510,7 @@ mod tests {
     #[test]
     fn inverse_negative_numerator() {
         let r = BoundedRational::from_longs(-2, 3).unwrap();
-        let inv = BoundedRational::inverse(Some(r)).unwrap().unwrap();
+        let inv = BoundedRational::inverse(r).unwrap();
         assert_eq!(inv.numerator(), &BigInt::from(3));
         assert_eq!(inv.denominator(), &BigInt::from(-2));
     }
@@ -1643,15 +1518,8 @@ mod tests {
     #[test]
     fn inverse_zero_numerator_errors() {
         let r = BoundedRational::from_long(0);
-        let result = BoundedRational::inverse(Some(r));
+        let result = BoundedRational::inverse(r);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn inverse_none_returns_ok_none() {
-        let result = BoundedRational::inverse(None);
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
     }
 
     // ── divide ────────────────────────────────────────────────────────────────
@@ -1660,8 +1528,7 @@ mod tests {
     fn divide_basic() {
         let r1 = BoundedRational::from_longs(1, 2).unwrap();
         let r2 = BoundedRational::from_longs(1, 4).unwrap();
-        let quot = BoundedRational::divide(Some(r1), Some(r2))
-            .unwrap()
+        let quot = BoundedRational::divide(r1, r2)
             .unwrap()
             .reduce()
             .positive_den();
@@ -1673,7 +1540,7 @@ mod tests {
     fn divide_by_zero_errors() {
         let r1 = BoundedRational::from_longs(1, 2).unwrap();
         let r2 = BoundedRational::from_long(0);
-        let result = BoundedRational::divide(Some(r1), Some(r2));
+        let result = BoundedRational::divide(r1, r2);
         assert!(result.is_err());
     }
 

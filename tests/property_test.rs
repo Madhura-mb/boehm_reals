@@ -2,6 +2,7 @@ use boehm_reals::evaluation::bounded_rational::BoundedRational;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use proptest::prelude::*;
+use std::ops::Add;
 
 fn rational(numerator: i64, denominator: i64) -> BoundedRational {
     BoundedRational::from_longs(numerator, denominator).expect("generated denominator is non-zero")
@@ -34,10 +35,8 @@ proptest! {
 
     #[test]
     fn add_then_subtract_round_trips(left in arb_rational(), right in arb_rational()) {
-        let sum = BoundedRational::add(Some(left.clone()), Some(right.clone()))
-            .expect("small generated inputs must produce a rational");
-        let round_trip = BoundedRational::subtract(Some(sum), Some(right))
-            .expect("small generated inputs must produce a rational");
+        let sum = BoundedRational::add(left.clone(), right.clone());
+        let round_trip = BoundedRational::subtract(sum, right);
 
         prop_assert_eq!(round_trip, left);
     }
