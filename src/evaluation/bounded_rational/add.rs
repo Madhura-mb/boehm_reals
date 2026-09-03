@@ -58,6 +58,8 @@ macro_rules! boundedrational_add {
     }};
 }
 
+pub(crate) use boundedrational_add;
+
 // -----------------------------------------------------------------------------
 // BoundedRational Addition Implementation
 // -----------------------------------------------------------------------------
@@ -469,6 +471,10 @@ impl Add<&BoundedRational> for &BigInt {
     }
 }
 
+// ============================================================================
+// BigInt Addition Assignment Implementation
+// ============================================================================
+
 // BoundedRational += BigInt
 impl AddAssign<BigInt> for BoundedRational {
     #[inline]
@@ -494,16 +500,16 @@ impl AddAssign<&BigInt> for BoundedRational {
 impl_sum_iter_type!(BoundedRational);
 
 #[cfg(test)]
-mod add_tests {
+pub(crate) mod add_tests {
     use super::*;
     use num_bigint::BigInt;
 
     // Helper Functions
-    fn br(n: i64, d: i64) -> BoundedRational {
+    pub(crate) fn br(n: i64, d: i64) -> BoundedRational {
         BoundedRational::from_longs(n, d).unwrap()
     }
 
-    fn assert_value(r: &BoundedRational, num: i64, den: i64) {
+    pub(crate) fn assert_value(r: &BoundedRational, num: i64, den: i64) {
         let reduced = r.reduce().positive_den();
         let expected = BoundedRational::from_longs(num, den)
             .unwrap()
