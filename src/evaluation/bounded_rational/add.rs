@@ -38,8 +38,8 @@ macro_rules! boundedrational_add {
                 + $b.denominator().bits();
 
             if input_bits > (MAX_SIZE as u64 * 3 / 4) {
-                let ra = $a_owned.reduce().positive_den();
-                let rb = $b_owned.reduce().positive_den();
+                let ra = $a.reduce().positive_den();
+                let rb = $b.reduce().positive_den();
 
                 let den = ra.denominator() * rb.denominator();
                 let num = ra.numerator() * rb.denominator() + ra.denominator() * rb.numerator();
@@ -953,8 +953,8 @@ mod add_tests {
     // T + BoundedRational (commutative scalar direction) — u32/u64/u128/i32/i64/i128 only
     // These 6 types get all 4 ownership combos via
     // forward_all_scalar_binop_to_val_val_commutative!.
-    // The promoted types (u8/u16/usize/i8/i16/isize) do NOT get this direction —
-    // there is no `scalar + BR` impl for them, only `BR + scalar`.
+    // The promoted types (u8/u16/usize/i8/i16/isize) also get the scalar + BoundedRational
+    // direction via promote_scalars!, along with their BoundedRational + scalar impls.
     // =========================================================================
 
     // ---- u32 ----
