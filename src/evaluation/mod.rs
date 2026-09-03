@@ -1,10 +1,11 @@
 /// Arbitrary-precision rational arithmetic with a bounded size budget.
 ///
 /// This module represents exact rational numbers as `numerator/denominator`
-/// pairs of [`num_bigint::BigInt`]s. Operations are subject to the bit-length
-/// limit defined by [`constants::MAX_SIZE`]. When an operation would exceed
-/// this limit, the caller is expected to fall back to constructive-real (`CR`)
-/// approximation.
+/// pairs of [`num_bigint::BigInt`]s. The combined bit length of the numerator
+/// and denominator is bounded by the limit defined by [`constants::MAX_SIZE`].
+/// When a rational exceeds this limit, it may be reduced to control the growth
+/// of intermediate values. If the value remains too large, the caller can fall
+/// back to constructive-real (`CR`) approximation.
 pub mod bounded_rational;
 
 /// This module defines commonly used `BigInt` values and size limits that
