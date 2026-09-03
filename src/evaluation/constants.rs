@@ -14,8 +14,8 @@ use once_cell::sync::Lazy;
 
 /// Maximum combined bit length of numerator and denominator.
 /// If `numerator.bits() + denominator.bits()` exceeds this value,
-/// the rational is considered too large to be useful and `None` is returned
-/// by arithmetic operations instead of a reduced result.
+/// the rational is considered too large to be useful and  may be reduced
+/// to control the growth of intermediate values.
 pub const MAX_SIZE: usize = 10_000;
 
 /// Additive identity. Returned directly when a result is exactly zero.

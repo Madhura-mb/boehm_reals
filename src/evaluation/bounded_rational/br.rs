@@ -56,12 +56,12 @@ fn signum_bigint(x: &BigInt) -> i32 {
     }
 }
 
-/// A ratio of two arbitrary-precision integers, `numerator/denominator`
+/// A ratio of two arbitrary-precision integers, `numerator/denominator`.
 ///
-/// Arithmetic operations return `None` when the result would exceed
-/// [`MAX_SIZE`] combined bits, signalling the caller to fall back to
-/// a constructive-real approximation. All values are treated as exact
-/// until that point.
+/// Arithmetic operations keep results as exact `BoundedRational` values.
+/// To prevent unbounded growth of numerator and denominator sizes, large
+/// intermediate values may be reduced before or after arithmetic operations.
+/// Values are kept exact throughout these operations.
 ///
 /// # Invariants
 /// - The denominator is never zero.
@@ -135,8 +135,8 @@ impl BoundedRational {
     /// Pure integers skip the bit-count check entirely and always return `false`,
     /// even if the numerator alone exceeds MAX_SIZE bits. This is intentional:
     /// integers do not exhibit the runaway numerator+denominator co-growth that
-    /// MAX_SIZE is designed to catch, and returning `None` for an exact integer
-    /// would be strictly worse than keeping it.
+    /// MAX_SIZE is designed to catch, so exact integers are kept without applying
+    /// the size limit.
     ///
     /// # Sign bit
     /// `BigInt::bits()` counts bits in the absolute value only — the sign bit is
@@ -197,21 +197,18 @@ impl BoundedRational {
         }
     }
 
-    /// Return a possibly-reduced version of `r`, or `None` if `r` is `None`.
+    /// Return a possibly-reduced version of `r`.
     ///
     /// # Reduction policy
     /// Reduction (via [`reduce`] + [`positive_den`]) is performed when either:
     /// - the value is already [`too_big`], **or**
-    /// - a 1-in-16 random chance fires (to reduce GCD cost across many ops).
+    /// - a 1-in-16 random chance fires to reduce the cost of repeated GCD
+    ///   calculations across many operations.
     ///
     /// If neither condition applies, `r` is returned unchanged.
     ///
-    /// The caller is responsible for checking whether the returned value is
-    /// still [`too_big`] and acting accordingly (e.g falling back to
-    /// constructive-real arithmetic).
-    ///
-    /// # None propagation
-    /// `None` input -> `None` output immediately, with no reduction attempted.
+    /// The result may still be large after reduction. Callers can use
+    /// [`too_big`] to determine whether further handling is required.
     ///
     /// [`reduce`]: BoundedRational::reduce
     /// [`positive_den`]: BoundedRational::positive_den
@@ -592,7 +589,7 @@ impl BoundedRational {
 
         let sign = nicer.signum();
         if sign < 0 {
-            return -BoundedRational::negate(Some(nicer)).unwrap().double_value();
+            return -BoundedRational::negate(nicer).double_value();
         }
 
         let appr_exp = nicer.numerator.bits() as i64 - nicer.denominator.bits() as i64;
@@ -1865,16 +1862,14 @@ mod tests {
     #[test]
     fn double_value_overflow_returns_infinity() {
         let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
-        let doubled =
-            BoundedRational::multiply(Some(max_r), Some(BoundedRational::from_long(2))).unwrap();
+        let doubled = BoundedRational::multiply(max_r, BoundedRational::from_long(2));
         assert_eq!(doubled.double_value(), f64::INFINITY);
     }
 
     #[test]
     fn double_value_negative_overflow_returns_negative_infinity() {
         let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
-        let doubled =
-            BoundedRational::multiply(Some(max_r), Some(BoundedRational::from_long(-2))).unwrap();
+        let doubled = BoundedRational::multiply(max_r, BoundedRational::from_long(-2));
         assert_eq!(doubled.double_value(), f64::NEG_INFINITY);
     }
 
