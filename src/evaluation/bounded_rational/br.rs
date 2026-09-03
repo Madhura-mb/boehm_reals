@@ -646,7 +646,7 @@ impl BoundedRational {
             exponent = -1023;
         }
 
-        if exponent > 1024 {
+        if exponent > 1023 {
             return f64::INFINITY;
         }
 
