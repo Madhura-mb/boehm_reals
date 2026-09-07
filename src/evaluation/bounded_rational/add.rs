@@ -500,24 +500,12 @@ impl AddAssign<&BigInt> for BoundedRational {
 impl_sum_iter_type!(BoundedRational);
 
 #[cfg(test)]
-pub(crate) mod add_tests {
+mod add_tests {
     use super::*;
+    use crate::evaluation::bounded_rational::common_helper_functions_for_tests::{
+        assert_value, br,
+    };
     use num_bigint::BigInt;
-
-    // Helper Functions
-    pub(crate) fn br(n: i64, d: i64) -> BoundedRational {
-        BoundedRational::from_longs(n, d).unwrap()
-    }
-
-    pub(crate) fn assert_value(r: &BoundedRational, num: i64, den: i64) {
-        let reduced = r.reduce().positive_den();
-        let expected = BoundedRational::from_longs(num, den)
-            .unwrap()
-            .reduce()
-            .positive_den();
-        assert_eq!(*reduced.numerator(), *expected.numerator());
-        assert_eq!(*reduced.denominator(), *expected.denominator());
-    }
 
     // =========================================================================
     // BoundedRational + BoundedRational — all 4 ownership combinations

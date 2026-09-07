@@ -12,7 +12,7 @@ use std::ops::{Sub, SubAssign};
 /// as-is — no duplication, and `add`'s own optimizations automatically
 /// apply to subtraction too.
 macro_rules! boundedrational_sub {
-    ($a:expr, $a_owned:expr, $b:expr, $b_owned:expr) => {{
+    ($a:expr, $a_owned:expr, $b_owned:expr) => {{
         let neg_b = BoundedRational::negate($b_owned);
         boundedrational_add!($a, $a_owned, &neg_b, neg_b)
     }};
@@ -28,7 +28,7 @@ impl Sub<&BoundedRational> for &BoundedRational {
 
     #[inline]
     fn sub(self, other: &BoundedRational) -> BoundedRational {
-        boundedrational_sub!(self, self.clone(), other, other.clone())
+        boundedrational_sub!(self, self.clone(), other.clone())
     }
 }
 
@@ -38,7 +38,7 @@ impl Sub<BoundedRational> for &BoundedRational {
 
     #[inline]
     fn sub(self, other: BoundedRational) -> BoundedRational {
-        boundedrational_sub!(self, self.clone(), other, other)
+        boundedrational_sub!(self, self.clone(), other)
     }
 }
 
@@ -48,7 +48,7 @@ impl Sub<&BoundedRational> for BoundedRational {
 
     #[inline]
     fn sub(self, other: &BoundedRational) -> BoundedRational {
-        boundedrational_sub!(self, self, other, other.clone())
+        boundedrational_sub!(self, self, other.clone())
     }
 }
 
@@ -58,7 +58,7 @@ impl Sub<BoundedRational> for BoundedRational {
 
     #[inline]
     fn sub(self, other: BoundedRational) -> BoundedRational {
-        boundedrational_sub!(self, self, other, other)
+        boundedrational_sub!(self, self, other)
     }
 }
 
@@ -484,7 +484,7 @@ impl Sub<&BoundedRational> for &BigInt {
 }
 
 // ============================================================================
-// BigInt Subtrction Assignment Implementation
+// BigInt Subtraction Assignment Implementation
 // ============================================================================
 
 // BoundedRational -= BigInt
@@ -508,12 +508,10 @@ impl SubAssign<&BigInt> for BoundedRational {
 #[cfg(test)]
 mod sub_tests {
     use super::*;
-    use crate::evaluation::bounded_rational::add::add_tests::{assert_value, br};
+    use crate::evaluation::bounded_rational::common_helper_functions_for_tests::{
+        assert_value, br,
+    };
     use num_bigint::BigInt;
-
-    // Assumes helper functions `br(num, den)` -> BoundedRational
-    // and `assert_value(&BoundedRational, num, den)` exist in the test harness,
-    // matching the style used elsewhere in this crate's test suite.
 
     // -------------------------------------------------------------------
     // Basic value/reference combinations
@@ -614,12 +612,11 @@ mod sub_tests {
     }
 
     #[test]
-    fn sub_different_denominators_reduces() {
-        // 2/4 - 1/4 = 1/4 (numerator should reduce, not stay 2/4 - 1/4 unreduced)
-        let a = br(2, 4);
-        let b = br(1, 4);
+    fn sub_different_denominators() {
+        let a = br(3, 4);
+        let b = br(1, 12);
         let diff = a - b;
-        assert_value(&diff, 1, 4);
+        assert_value(&diff, 2, 3);
     }
 
     #[test]
@@ -672,6 +669,32 @@ mod sub_tests {
         let mut a = br(5, 6);
         a -= br(5, 6);
         assert_value(&a, 0, 1);
+    }
+
+    #[test]
+    fn sub_large_but_reducible_triggers_pre_reduction_heuristic() {
+        let factor = BigInt::from(1u32) << (MAX_SIZE / 2);
+        let r1 = BoundedRational::new(&factor * 5, factor.clone()).unwrap();
+        let r2 = BoundedRational::new(&factor * 3, factor).unwrap();
+        let diff = &r1 - &r2;
+        // (5*factor)/factor - (3*factor)/factor = 5 - 3 = 2
+        assert_value(&diff, 2, 1);
+    }
+
+    #[test]
+    fn sub_negative_denominator_both_sides() {
+        let diff = br(1, -2) - br(1, -3);
+        // -1/2 - -1/3 = -1/2 + 1/3 = -1/6
+        assert_value(&diff, -1, 6);
+    }
+
+    #[test]
+    fn sub_zero_with_negative_denominator_operand() {
+        // zero-numerator left operand with negative denominator on the
+        // right, still short-circuits correctly through negate + add
+        let diff = br(0, -5) - br(1, -2);
+        // 0 - (-1/2) = 1/2
+        assert_value(&diff, 1, 2);
     }
 
     // -------------------------------------------------------------------
@@ -1005,8 +1028,7 @@ mod sub_tests {
     // -------------------------------------------------------------------
 
     #[test]
-    fn sub_fractions_with_common_reduction() {
-        // 5/6 - 1/6 = 4/6 -> reduces to 2/3
+    fn sub_fractions_with_common_denominator() {
         let a = br(5, 6);
         let b = br(1, 6);
         let diff = a - b;
@@ -1015,7 +1037,6 @@ mod sub_tests {
 
     #[test]
     fn sub_fractions_coprime_denominators() {
-        // 1/3 - 1/5 = 2/15
         let a = br(1, 3);
         let b = br(1, 5);
         let diff = a - b;
@@ -1027,5 +1048,66 @@ mod sub_tests {
         let a = br(-1, 2);
         let diff = a - (-1i32);
         assert_value(&diff, 1, 2);
+    }
+
+    // -------------------------------------------------------------------
+    // Reverse-direction scalar subtraction: scalar - BoundedRational
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn sub_u8_minus_boundedrational() {
+        let a = br(5, 1);
+        let diff = 20u8 - a;
+        assert_value(&diff, 15, 1);
+    }
+
+    #[test]
+    fn sub_u16_minus_boundedrational() {
+        let a = br(999, 1);
+        let diff = 1000u16 - a;
+        assert_value(&diff, 1, 1);
+    }
+
+    #[test]
+    fn sub_usize_minus_boundedrational() {
+        let a = br(20, 1);
+        let diff = 50usize - a;
+        assert_value(&diff, 30, 1);
+    }
+
+    #[test]
+    fn sub_i8_minus_boundedrational() {
+        let a = br(-5, 1);
+        let diff = 5i8 - a;
+        assert_value(&diff, 10, 1);
+    }
+
+    #[test]
+    fn sub_i16_minus_boundedrational() {
+        let a = br(-100, 1);
+        let diff = 100i16 - a;
+        assert_value(&diff, 200, 1);
+    }
+
+    #[test]
+    fn sub_isize_minus_boundedrational() {
+        let a = br(-1, 1);
+        let diff = 1isize - a;
+        assert_value(&diff, 2, 1);
+    }
+
+    #[test]
+    fn sub_i64_minus_boundedrational() {
+        let a = br(1, 3);
+        let diff = -2i64 - a;
+        // -2 - 1/3 = -7/3
+        assert_value(&diff, -7, 3);
+    }
+
+    #[test]
+    fn sub_i128_minus_boundedrational() {
+        let a = br(0, 1);
+        let diff = -1i128 - a;
+        assert_value(&diff, -1, 1);
     }
 }
