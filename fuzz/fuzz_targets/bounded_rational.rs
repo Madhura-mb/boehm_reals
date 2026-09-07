@@ -37,7 +37,7 @@ fuzz_target!(|data: &[u8]| {
 
         let _ = BoundedRational::subtract(left.clone(), right.clone());
         let _ = BoundedRational::multiply(left.clone(), right.clone());
-        let _ = BoundedRational::divide(left, right);
+        let _ = BoundedRational::divide(left.clone(), right.clone());
     }
 
     let _ = BoundedRational::value_of_double(f64::from_bits(float_bits));
