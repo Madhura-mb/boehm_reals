@@ -14,7 +14,7 @@ libfuzzer-sys = "0.4"
 boehm_reals = { path = ".." }
 
 [[bin]]
-name = "bounded-rational"
+name = "bounded_rational"
 path = "fuzz_targets/bounded_rational.rs"
 test = false
 doc = false
