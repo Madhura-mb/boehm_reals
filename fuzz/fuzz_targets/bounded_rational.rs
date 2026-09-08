@@ -30,11 +30,15 @@ fuzz_target!(|data: &[u8]| {
 
     if let (Some(left), Some(right)) = (&left, &right) {
         let _ = left.compare_to(right);
+
+        // `add` is now only available via the `Add` operator (see
+        // boundedrational_add! macro forwarding), not as a static fn.
+        let _ = left.clone() + right.clone();
+
+        let _ = BoundedRational::subtract(left.clone(), right.clone());
+        let _ = BoundedRational::multiply(left.clone(), right.clone());
+        let _ = BoundedRational::divide(left.clone(), right.clone());
     }
 
-    let _ = BoundedRational::add(left.clone(), right.clone());
-    let _ = BoundedRational::subtract(left.clone(), right.clone());
-    let _ = BoundedRational::multiply(left.clone(), right.clone());
-    let _ = BoundedRational::divide(left, right);
     let _ = BoundedRational::value_of_double(f64::from_bits(float_bits));
 });
