@@ -6,5 +6,8 @@ mod common_arithmetic_macros;
 
 mod add;
 mod br;
+mod subtract;
+#[cfg(test)]
+mod test_helpers;
 
 pub use br::{BoundedRational, NonFiniteError, ZeroDenominatorError};

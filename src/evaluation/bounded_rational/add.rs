@@ -58,6 +58,8 @@ macro_rules! boundedrational_add {
     }};
 }
 
+pub(crate) use boundedrational_add;
+
 // -----------------------------------------------------------------------------
 // BoundedRational Addition Implementation
 // -----------------------------------------------------------------------------
@@ -469,6 +471,10 @@ impl Add<&BoundedRational> for &BigInt {
     }
 }
 
+// ============================================================================
+// BigInt Addition Assignment Implementation
+// ============================================================================
+
 // BoundedRational += BigInt
 impl AddAssign<BigInt> for BoundedRational {
     #[inline]
@@ -496,22 +502,8 @@ impl_sum_iter_type!(BoundedRational);
 #[cfg(test)]
 mod add_tests {
     use super::*;
+    use crate::evaluation::bounded_rational::test_helpers::{assert_value, br};
     use num_bigint::BigInt;
-
-    // Helper Functions
-    fn br(n: i64, d: i64) -> BoundedRational {
-        BoundedRational::from_longs(n, d).unwrap()
-    }
-
-    fn assert_value(r: &BoundedRational, num: i64, den: i64) {
-        let reduced = r.reduce().positive_den();
-        let expected = BoundedRational::from_longs(num, den)
-            .unwrap()
-            .reduce()
-            .positive_den();
-        assert_eq!(*reduced.numerator(), *expected.numerator());
-        assert_eq!(*reduced.denominator(), *expected.denominator());
-    }
 
     // =========================================================================
     // BoundedRational + BoundedRational — all 4 ownership combinations
