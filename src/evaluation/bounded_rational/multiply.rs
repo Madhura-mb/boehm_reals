@@ -527,7 +527,7 @@ impl_product_iter_type!(BoundedRational);
 #[cfg(test)]
 mod mul_tests {
     use super::*;
-    use crate::evaluation::bounded_rational::add::add_tests::{assert_value, br};
+    use crate::evaluation::bounded_rational::test_helpers::{assert_value, br};
     use num_bigint::BigInt;
 
     // ============================================================================
@@ -682,21 +682,19 @@ mod mul_tests {
     }
 
     #[test]
-    fn mul_large_numerators_triggers_pre_reduction() {
-        // Values sized to exceed MAX_SIZE * 3/4 bit threshold, forcing the
-        // reduce()+positive_den() path before multiplying.
-        let a = br_from_str(
-            "123456789012345678901234567890123456789",
-            "987654321098765432109876543210987654321",
-        );
-        let b = br_from_str(
-            "111111111111111111111111111111111111111",
-            "222222222222222222222222222222222222221",
-        );
+    fn mul_large_numbers_reduces_correctly() {
+        let a = BoundedRational {
+            numerator: BigInt::from(10).pow(100),
+            denominator: BigInt::from(10).pow(50),
+        };
+        let b = BoundedRational {
+            numerator: BigInt::from(10).pow(50),
+            denominator: BigInt::from(10).pow(100),
+        };
+
         let product = &a * &b;
-        // Sanity: result should be well-formed and reproducible via commutation
-        let product_swapped = &b * &a;
-        assert_eq!(product, product_swapped);
+
+        assert_value(&product, 1, 1);
     }
 
     // ============================================================================
@@ -839,8 +837,8 @@ mod mul_tests {
     fn mul_u128_scalar_large() {
         let a = br(1, 2);
         let product = a * u128::MAX;
-        // just verify denominator becomes 2 and numerator equals u128::MAX
-        assert_value(&product, u128::MAX as i128, 2); // adjust helper as needed for big values
+        assert_eq!(product.numerator(), &BigInt::from(u128::MAX));
+        assert_eq!(product.denominator(), &BigInt::from(2));
     }
 
     #[test]
@@ -863,7 +861,8 @@ mod mul_tests {
     fn mul_i128_scalar_min_value() {
         let a = br(1, 1);
         let product = a * i128::MIN;
-        assert_value(&product, i128::MIN, 1);
+        assert_eq!(product.numerator(), &BigInt::from(i128::MIN));
+        assert_eq!(product.denominator(), &BigInt::from(1));
     }
 
     // ============================================================================
