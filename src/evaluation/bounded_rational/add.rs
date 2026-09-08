@@ -502,9 +502,7 @@ impl_sum_iter_type!(BoundedRational);
 #[cfg(test)]
 mod add_tests {
     use super::*;
-    use crate::evaluation::bounded_rational::common_helper_functions_for_tests::{
-        assert_value, br,
-    };
+    use crate::evaluation::bounded_rational::test_helpers::{assert_value, br};
     use num_bigint::BigInt;
 
     // =========================================================================
