@@ -1,6 +1,7 @@
 #![no_main]
 
 use boehm_reals::evaluation::bounded_rational::BoundedRational;
+use boehm_reals::evaluation::bounded_rational::{boundedrational_add, boundedrational_sub};
 use libfuzzer_sys::fuzz_target;
 
 fn i64_at(data: &[u8], offset: usize) -> i64 {
@@ -33,9 +34,22 @@ fuzz_target!(|data: &[u8]| {
 
         // `add` is now only available via the `Add` operator (see
         // boundedrational_add! macro forwarding), not as a static fn.
-        let _ = left.clone() + right.clone();
+        // let _ = left.clone() + right.clone();
 
-        let _ = BoundedRational::subtract(left.clone(), right.clone());
+        // let _ = BoundedRational::subtract(left.clone(), right.clone());
+
+        let _ = boundedrational_add!(
+            left,
+            left.clone(),
+            right,
+            right.clone()
+        );
+
+        let _ = boundedrational_sub!(
+            left,
+            left.clone(),
+            right.clone()
+        );
         let _ = BoundedRational::multiply(left.clone(), right.clone());
         let _ = BoundedRational::divide(left.clone(), right.clone());
     }

@@ -18,6 +18,8 @@ macro_rules! boundedrational_sub {
     }};
 }
 
+pub(crate) use boundedrational_sub;
+
 // -----------------------------------------------------------------------------
 // BoundedRational Subtraction Implementation
 // -----------------------------------------------------------------------------
