@@ -11,3 +11,5 @@ mod subtract;
 mod test_helpers;
 
 pub use br::{BoundedRational, NonFiniteError, ZeroDenominatorError};
+pub use add::boundedrational_add;
+pub use subtract::boundedrational_sub;
