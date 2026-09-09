@@ -1,7 +1,8 @@
 #![no_main]
 
 use boehm_reals::evaluation::bounded_rational::BoundedRational;
-use boehm_reals::evaluation::bounded_rational::{boundedrational_add, boundedrational_sub};
+use boehm_reals::evaluation::bounded_rational::add::boundedrational_add;
+use boehm_reals::evaluation::bounded_rational::subtract::boundedrational_sub;
 use libfuzzer_sys::fuzz_target;
 
 fn i64_at(data: &[u8], offset: usize) -> i64 {
