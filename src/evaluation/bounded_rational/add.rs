@@ -6,7 +6,6 @@ use std::iter::Sum;
 use std::mem;
 use std::ops::{Add, AddAssign};
 
-#[macro_export]
 /// Returns the sum of `r1` and `r2`, possibly reduces.
 ///
 /// If either operand is exactly zero, the other operand is returned
@@ -59,7 +58,7 @@ macro_rules! boundedrational_add {
     }};
 }
 
-pub use boundedrational_add;
+pub(crate) use boundedrational_add;
 
 // -----------------------------------------------------------------------------
 // BoundedRational Addition Implementation
