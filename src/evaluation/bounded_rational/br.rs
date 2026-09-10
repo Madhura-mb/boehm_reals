@@ -72,9 +72,9 @@ fn signum_bigint(x: &BigInt) -> i32 {
 #[derive(Clone, Debug)]
 pub struct BoundedRational {
     /// The top half of the fraction.
-    pub(crate) numerator: BigInt,
+    numerator: BigInt,
     /// The bottom half of the fraction. Must never be zero.
-    pub(crate) denominator: BigInt,
+    denominator: BigInt,
 }
 
 impl BoundedRational {

@@ -357,7 +357,7 @@ macro_rules! impl_sum_iter_type {
 /// Requires:
 ///     $res: Mul<T, Output = $res>
 /// Starts with:
-///     $res::from_bigint(ZERO.clone())
+///     $res::from_bigint(ONE.clone())
 /// and folds:
 ///     zero
 ///     zero op item1
