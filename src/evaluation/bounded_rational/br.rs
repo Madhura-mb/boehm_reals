@@ -710,6 +710,34 @@ impl PartialEq for BoundedRational {
 /// `BoundedRational` never contains NaN-like values, so equality is total.
 impl Eq for BoundedRational {}
 
+impl PartialOrd for BoundedRational {
+    /// Compares two `BoundedRational` values and returns their ordering.
+    ///
+    /// This uses [`compare_to`] to compare the exact rational values.
+    /// Since `BoundedRational` does not contain `NaN`-like values, the result
+    /// is always `Some(Ordering)`.
+    ///
+    /// [`compare_to`]: BoundedRational::compare_to
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BoundedRational {
+    /// Compares two `BoundedRational` values using their exact values.
+    ///
+    /// The comparison is performed by [`compare_to`], which handles different
+    /// numerator/denominator representations correctly. For example, `1/2`
+    /// is ordered as equal to `2/4`.
+    ///
+    /// [`compare_to`]: BoundedRational::compare_to
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.compare_to(other)
+    }
+}
+
 impl Hash for BoundedRational {
     /// Hashes this rational so that equal values always produce equal hashes.
     ///
@@ -1597,7 +1625,73 @@ mod tests {
         assert_ne!(r1, r2);
     }
 
-    // ── Hash ─────────────────────────────────────────────────────────
+    // ── PartialOrd / Ord ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn partial_ord_greater_than() {
+        let r1 = BoundedRational::from_longs(2, 3).unwrap();
+        let r2 = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r1 > r2, true);
+        assert_eq!(r1 >= r2, true);
+        assert_eq!(r1 < r2, false);
+        assert_eq!(r1 <= r2, false);
+    }
+
+    #[test]
+    fn partial_ord_less_than() {
+        let r1 = BoundedRational::from_longs(1, 3).unwrap();
+        let r2 = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(r1 < r2, true);
+        assert_eq!(r1 <= r2, true);
+        assert_eq!(r1 > r2, false);
+        assert_eq!(r1 >= r2, false);
+    }
+
+    #[test]
+    fn partial_ord_equal_different_representation() {
+        let r1 = BoundedRational::from_longs(1, 3).unwrap();
+        let r2 = BoundedRational::from_longs(2, 6).unwrap();
+        assert_eq!(r1 <= r2, true);
+        assert_eq!(r1 >= r2, true);
+        assert_eq!(r1 < r2, false);
+        assert_eq!(r1 > r2, false);
+    }
+
+    #[test]
+    fn partial_ord_negative_values() {
+        let r1 = BoundedRational::from_longs(-1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(-1, 3).unwrap();
+        // -1/2 < -1/3
+        assert_eq!(r1 < r2, true);
+        assert_eq!(r1 <= r2, true);
+        assert_eq!(r2 > r1, true);
+        assert_eq!(r2 >= r1, true);
+    }
+
+    #[test]
+    fn partial_ord_negative_denominator() {
+        let r1 = BoundedRational::from_longs(1, -2).unwrap();
+        let r2 = BoundedRational::from_longs(1, 3).unwrap();
+        // 1/-2 = -1/2 < 1/3
+        assert_eq!(r1 < r2, true);
+        assert_eq!(r1 <= r2, true);
+        assert_eq!(r2 > r1, true);
+        assert_eq!(r2 >= r1, true);
+    }
+
+    #[test]
+    fn ord_cmp_returns_correct_ordering() {
+        let smaller = BoundedRational::from_longs(1, 3).unwrap();
+        let equal = BoundedRational::from_longs(2, 6).unwrap();
+        let greater = BoundedRational::from_longs(1, 2).unwrap();
+        assert_eq!(smaller.cmp(&equal), Ordering::Equal);
+        assert_eq!(equal.cmp(&smaller), Ordering::Equal);
+        assert_eq!(greater.cmp(&equal), Ordering::Greater);
+        assert_eq!(equal.cmp(&greater), Ordering::Less);
+        assert_eq!(equal.cmp(&equal), Ordering::Equal);
+    }
+
+    // ── Hash ────────────────────────────────────────────────────────────────────
 
     #[test]
     fn hash_matches_for_equal_values() {
