@@ -492,21 +492,13 @@ impl BoundedRational {
     pub fn compare_to(&self, other: &BoundedRational) -> Ordering {
         let sign1 = self.signum();
         let sign2 = other.signum();
+
         if sign1 != sign2 {
             return sign1.cmp(&sign2);
         }
 
-        if self.numerator == *ZERO && other.signum() == 1 {
-            return Ordering::Less;
-        }
-        if self.numerator == *ZERO && other.signum() == -1 {
-            return Ordering::Greater;
-        }
-        if self.signum() == 1 && other.numerator == *ZERO {
-            return Ordering::Greater;
-        }
-        if self.signum() == -1 && other.numerator == *ZERO {
-            return Ordering::Less;
+        if self.numerator == *ZERO && other.numerator == *ZERO {
+            return Ordering::Equal;
         }
 
         let lhs = Self::cross_multiply(&self.numerator, &other.denominator);
@@ -1677,6 +1669,23 @@ mod tests {
         assert_eq!(r1 <= r2, true);
         assert_eq!(r2 > r1, true);
         assert_eq!(r2 >= r1, true);
+    }
+
+    #[test]
+    fn partial_ord_against_zero() {
+        let positive = BoundedRational::from_longs(1, 2).unwrap();
+        let negative = BoundedRational::from_longs(-1, 2).unwrap();
+        let zero = BoundedRational::from_bigint(ZERO.clone());
+
+        assert_eq!(negative < zero, true);
+        assert_eq!(negative <= zero, true);
+        assert_eq!(negative > zero, false);
+        assert_eq!(negative >= zero, false);
+
+        assert_eq!(positive > zero, true);
+        assert_eq!(positive >= zero, true);
+        assert_eq!(positive < zero, false);
+        assert_eq!(positive <= zero, false);
     }
 
     #[test]
