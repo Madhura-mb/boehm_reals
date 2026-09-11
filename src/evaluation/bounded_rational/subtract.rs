@@ -6,7 +6,7 @@ use num_bigint::BigInt;
 use std::mem;
 use std::ops::{Sub, SubAssign};
 
-/// `r1 - r2` is defined as `r1 + (-r2)`. We negate the right-hand operand
+/// `a - b` is defined as `a + (-b)`. We negate the right-hand operand
 /// into a local binding, then forward straight into `boundedrational_add!`
 /// so all of `add`'s zero-check / reduction-heuristic logic is reused
 /// as-is — no duplication, and `add`'s own optimizations automatically
@@ -17,7 +17,6 @@ macro_rules! boundedrational_sub {
         boundedrational_add!($a, $a_owned, &neg_b, neg_b)
     }};
 }
-
 
 // -----------------------------------------------------------------------------
 // BoundedRational Subtraction Implementation

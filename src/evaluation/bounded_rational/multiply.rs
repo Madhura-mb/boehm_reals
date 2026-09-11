@@ -6,9 +6,11 @@ use std::iter::Product;
 use std::mem;
 use std::ops::{Mul, MulAssign};
 
-/// Returns the product of `r1` and `r2` , possibly reduced.
+/// Returns the product of `a` and `b` , possibly reduced.
 ///
 /// # Shortcuts
+/// - If either argument equals 0, zero is returned immediately, skipping
+///   multiplication entirely.
 /// - If either argument equals `1` (checked via [`equals`]), the other
 ///   argument is returned immediately, skipping multiplication entirely.
 /// - If either argument equals `-1` (checked via [`equals`]), the other
@@ -22,65 +24,59 @@ use std::ops::{Mul, MulAssign};
 /// checked against a threshold of `MAX_SIZE * 3/4`. The result numerator
 /// and denominator bit sizes are also checked independently, since either
 /// can overflow even when the total input size looks acceptable:
-/// - `input_bits  = r1.num.bits + r1.den.bits + r2.num.bits + r2.den.bits`
-/// - `result_num_bits = r1.num.bits + r2.num.bits`
-/// - `result_den_bits = r1.den.bits + r2.den.bits`
+/// - `input_bits  = a.num.bits + a.den.bits + b.num.bits + b.den.bits`
+/// - `result_num_bits = a.num.bits + b.num.bits`
+/// - `result_den_bits = a.den.bits + b.den.bits`
 ///
-/// If any of these exceed the threshold, both `r1` and `r2` are reduced and
-/// sign-normalised before the multiplication, keeping intermediate values
-/// small. When this pre-reduction fires, the `maybe_reduce` step afterwards
-/// is skipped, since a second reduction pass would be redundant. When the
-/// threshold is not exceeded, `maybe_reduce` is called on the raw product
-/// as usual.
+/// If any of these exceed the threshold, both `a` and `b` are reduced and
+/// sign-normalised before multiplication to keep the intermediate values
+/// small. The product is then passed to `maybe_reduce` in all cases, because
+/// multiplying two reduced rationals does not necessarily produce a reduced
+/// result.
 macro_rules! boundedrational_mul {
     ($a:expr, $b:expr) => {{
         let a = $a;
         let b = $b;
 
-        if a.equals(&ONE) {
+        if a.equals(&ZERO) {
+            BoundedRational::from_bigint(ZERO.clone())
+        } else if b.equals(&ZERO) {
+            BoundedRational::from_bigint(ZERO.clone())
+        } else if a.equals(&ONE) {
             b
         } else if b.equals(&ONE) {
             a
         } else if a.equals(&MINUS_ONE) {
-            BoundedRational {
-                numerator: -b.numerator,
-                denominator: b.denominator,
-            }
+            BoundedRational::negate(b)
         } else if b.equals(&MINUS_ONE) {
-            BoundedRational {
-                numerator: -a.numerator,
-                denominator: a.denominator,
-            }
+            BoundedRational::negate(a)
         } else {
             let threshold = MAX_SIZE as u64 * 3 / 4;
 
-            let input_bits = a.numerator.bits()
-                + a.denominator.bits()
-                + b.numerator.bits()
-                + b.denominator.bits();
+            let input_bits = a.numerator().bits()
+                + a.denominator().bits()
+                + b.numerator().bits()
+                + b.denominator().bits();
 
-            let result_num_bits = a.numerator.bits() + b.numerator.bits();
-            let result_den_bits = a.denominator.bits() + b.denominator.bits();
+            let result_num_bits = a.numerator().bits() + b.numerator().bits();
+            let result_den_bits = a.denominator().bits() + b.denominator().bits();
 
-            let (a, b, already_reduced) = if input_bits > threshold
+            let (a, b) = if input_bits > threshold
                 || result_num_bits > threshold
                 || result_den_bits > threshold
             {
-                (a.reduce().positive_den(), b.reduce().positive_den(), true)
+                (a.reduce().positive_den(), b.reduce().positive_den())
             } else {
-                (a, b, false)
+                (a, b)
             };
 
-            let result = BoundedRational {
-                numerator: &a.numerator * &b.numerator,
-                denominator: &a.denominator * &b.denominator,
-            };
+            let result = BoundedRational::new(
+                a.numerator() * b.numerator(),
+                a.denominator() * b.denominator(),
+            )
+            .expect("denominator is nonzero");
 
-            if already_reduced {
-                result
-            } else {
-                BoundedRational::maybe_reduce(result)
-            }
+            BoundedRational::maybe_reduce(result)
         }
     }};
 }
@@ -527,7 +523,7 @@ impl_product_iter_type!(BoundedRational);
 #[cfg(test)]
 mod mul_tests {
     use super::*;
-    use crate::evaluation::bounded_rational::add::add_tests::{assert_value, br};
+    use crate::evaluation::bounded_rational::test_helpers::{assert_value, br};
     use num_bigint::BigInt;
 
     // ============================================================================
@@ -682,21 +678,13 @@ mod mul_tests {
     }
 
     #[test]
-    fn mul_large_numerators_triggers_pre_reduction() {
-        // Values sized to exceed MAX_SIZE * 3/4 bit threshold, forcing the
-        // reduce()+positive_den() path before multiplying.
-        let a = br_from_str(
-            "123456789012345678901234567890123456789",
-            "987654321098765432109876543210987654321",
-        );
-        let b = br_from_str(
-            "111111111111111111111111111111111111111",
-            "222222222222222222222222222222222222221",
-        );
-        let product = &a * &b;
-        // Sanity: result should be well-formed and reproducible via commutation
-        let product_swapped = &b * &a;
-        assert_eq!(product, product_swapped);
+    fn mul_large_but_reducible_triggers_pre_reduction_heuristic() {
+        let factor = BigInt::from(1u32) << (MAX_SIZE / 2);
+        let r1 = BoundedRational::new(&factor * 5, factor.clone()).unwrap();
+        let r2 = BoundedRational::new(&factor * 3, factor).unwrap();
+        let product = &r1 * &r2;
+        // (5*factor)/factor * (3*factor)/factor = 5 * 3 = 15
+        assert_value(&product, 15, 1);
     }
 
     // ============================================================================
@@ -839,8 +827,8 @@ mod mul_tests {
     fn mul_u128_scalar_large() {
         let a = br(1, 2);
         let product = a * u128::MAX;
-        // just verify denominator becomes 2 and numerator equals u128::MAX
-        assert_value(&product, u128::MAX as i128, 2); // adjust helper as needed for big values
+        assert_eq!(product.numerator(), &BigInt::from(u128::MAX));
+        assert_eq!(product.denominator(), &BigInt::from(2));
     }
 
     #[test]
@@ -861,9 +849,11 @@ mod mul_tests {
 
     #[test]
     fn mul_i128_scalar_min_value() {
-        let a = br(1, 1);
+        let a = br(2, 1);
         let product = a * i128::MIN;
-        assert_value(&product, i128::MIN, 1);
+        let expected = BigInt::from(i128::MIN) * 2;
+        assert_eq!(product.numerator(), &expected);
+        assert_eq!(product.denominator(), &BigInt::from(1));
     }
 
     // ============================================================================
