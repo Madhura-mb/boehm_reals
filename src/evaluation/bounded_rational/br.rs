@@ -673,7 +673,6 @@ impl std::fmt::Display for BoundedRational {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evaluation::bounded_rational::multiply::boundedrational_mul;
     use core::f64;
     use num_bigint::BigInt;
     use std::cmp::Ordering;
@@ -1642,14 +1641,14 @@ mod tests {
     #[test]
     fn double_value_overflow_returns_infinity() {
         let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
-        let doubled = boundedrational_mul!(max_r, BoundedRational::from_long(2));
+        let doubled = max_r * BoundedRational::from_long(2);
         assert_eq!(doubled.double_value(), f64::INFINITY);
     }
 
     #[test]
     fn double_value_negative_overflow_returns_negative_infinity() {
         let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
-        let doubled = boundedrational_mul!(max_r, BoundedRational::from_long(-2));
+        let doubled = max_r * BoundedRational::from_long(-2);
         assert_eq!(doubled.double_value(), f64::NEG_INFINITY);
     }
 
