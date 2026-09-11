@@ -40,7 +40,7 @@ macro_rules! boundedrational_mul {
 
         if a.equals(&ZERO) {
             BoundedRational::from_bigint(ZERO.clone())
-        } else if a.equals(&ZERO) {
+        } else if b.equals(&ZERO) {
             BoundedRational::from_bigint(ZERO.clone())
         } else if a.equals(&ONE) {
             b
@@ -81,6 +81,7 @@ macro_rules! boundedrational_mul {
     }};
 }
 
+#[cfg(test)]
 pub(crate) use boundedrational_mul;
 
 // -----------------------------------------------------------------------------
