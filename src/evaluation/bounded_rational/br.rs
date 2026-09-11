@@ -6,6 +6,7 @@ use num_traits::ToPrimitive;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
+use std::ops::Neg;
 
 /// Error returned when a `BoundedRational` is constructed with a zero denominator.
 #[derive(Clone, Debug)]
@@ -731,6 +732,30 @@ impl std::fmt::Display for BoundedRational {
     /// user-facing one.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}/{}", self.numerator, self.denominator)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// BoundedRational Negation Implementation
+// -----------------------------------------------------------------------------
+
+// BoundedRational
+impl Neg for BoundedRational {
+    type Output = BoundedRational;
+
+    #[inline]
+    fn neg(self) -> BoundedRational {
+        BoundedRational::negate(self)
+    }
+}
+
+// &BoundedRational
+impl Neg for &BoundedRational {
+    type Output = BoundedRational;
+
+    #[inline]
+    fn neg(self) -> BoundedRational {
+        BoundedRational::negate(self.clone())
     }
 }
 
@@ -1914,5 +1939,53 @@ mod tests {
     fn display_negative_denominator_shown_raw() {
         let r = BoundedRational::from_longs(3, -4).unwrap();
         assert_eq!(r.to_string(), "3/-4");
+    }
+
+    // ── Neg Traits ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn neg_owned_positive_numerator() {
+        let r =
+            BoundedRational::new(BigInt::from(3), BigInt::from(4)).expect("denominator is nonzero");
+        let neg = Neg::neg(r);
+
+        assert_eq!(*neg.numerator(), BigInt::from(-3));
+        assert_eq!(*neg.denominator(), BigInt::from(4));
+    }
+
+    #[test]
+    fn neg_ref_positive_numerator() {
+        let r =
+            BoundedRational::new(BigInt::from(3), BigInt::from(4)).expect("denominator is nonzero");
+        let neg = Neg::neg(&r);
+
+        assert_eq!(*neg.numerator(), BigInt::from(-3));
+        assert_eq!(*neg.denominator(), BigInt::from(4));
+
+        assert_eq!(*r.numerator(), BigInt::from(3));
+        assert_eq!(*r.denominator(), BigInt::from(4));
+    }
+
+    #[test]
+    fn neg_owned_negative_numerator() {
+        let r = BoundedRational::new(BigInt::from(-5), BigInt::from(7))
+            .expect("denominator is nonzero");
+        let neg = Neg::neg(r);
+
+        assert_eq!(*neg.numerator(), BigInt::from(5));
+        assert_eq!(*neg.denominator(), BigInt::from(7));
+    }
+
+    #[test]
+    fn neg_ref_negative_numerator() {
+        let r = BoundedRational::new(BigInt::from(-5), BigInt::from(7))
+            .expect("denominator is nonzero");
+        let neg = Neg::neg(&r);
+
+        assert_eq!(*neg.numerator(), BigInt::from(5));
+        assert_eq!(*neg.denominator(), BigInt::from(7));
+
+        assert_eq!(*r.numerator(), BigInt::from(-5));
+        assert_eq!(*r.denominator(), BigInt::from(7));
     }
 }
