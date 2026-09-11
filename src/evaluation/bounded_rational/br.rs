@@ -497,7 +497,7 @@ impl BoundedRational {
             return sign1.cmp(&sign2);
         }
 
-        if sign1 == 0 && sign2 == 0 {
+        if sign1 == 0 {
             return Ordering::Equal;
         }
 
