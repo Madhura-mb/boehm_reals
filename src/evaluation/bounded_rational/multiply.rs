@@ -6,9 +6,11 @@ use std::iter::Product;
 use std::mem;
 use std::ops::{Mul, MulAssign};
 
-/// Returns the product of `r1` and `r2` , possibly reduced.
+/// Returns the product of `a` and `b` , possibly reduced.
 ///
 /// # Shortcuts
+/// - If either argument equals 0, zero is returned immediately, skipping
+///   multiplication entirely.
 /// - If either argument equals `1` (checked via [`equals`]), the other
 ///   argument is returned immediately, skipping multiplication entirely.
 /// - If either argument equals `-1` (checked via [`equals`]), the other
@@ -22,11 +24,11 @@ use std::ops::{Mul, MulAssign};
 /// checked against a threshold of `MAX_SIZE * 3/4`. The result numerator
 /// and denominator bit sizes are also checked independently, since either
 /// can overflow even when the total input size looks acceptable:
-/// - `input_bits  = r1.num.bits + r1.den.bits + r2.num.bits + r2.den.bits`
-/// - `result_num_bits = r1.num.bits + r2.num.bits`
-/// - `result_den_bits = r1.den.bits + r2.den.bits`
+/// - `input_bits  = a.num.bits + a.den.bits + b.num.bits + b.den.bits`
+/// - `result_num_bits = a.num.bits + b.num.bits`
+/// - `result_den_bits = a.den.bits + b.den.bits`
 ///
-/// If any of these exceed the threshold, both `r1` and `r2` are reduced and
+/// If any of these exceed the threshold, both `a` and `b` are reduced and
 /// sign-normalised before multiplication to keep the intermediate values
 /// small. The product is then passed to `maybe_reduce` in all cases, because
 /// multiplying two reduced rationals does not necessarily produce a reduced
@@ -36,20 +38,18 @@ macro_rules! boundedrational_mul {
         let a = $a;
         let b = $b;
 
-        if a.equals(&ONE) {
+        if a.equals(&ZERO) {
+            BoundedRational::from_bigint(ZERO.clone())
+        } else if a.equals(&ZERO) {
+            BoundedRational::from_bigint(ZERO.clone())
+        } else if a.equals(&ONE) {
             b
         } else if b.equals(&ONE) {
             a
-        } else if *a.numerator() == *ZERO {
-            BoundedRational::from_bigint(ZERO.clone())
-        } else if *b.numerator() == *ZERO {
-            BoundedRational::from_bigint(ZERO.clone())
         } else if a.equals(&MINUS_ONE) {
-            BoundedRational::new(-b.numerator().clone(), b.denominator().clone())
-                .expect("denominator is nonzero")
+            BoundedRational::negate(b)
         } else if b.equals(&MINUS_ONE) {
-            BoundedRational::new(-a.numerator().clone(), a.denominator().clone())
-                .expect("denominator is nonzero")
+            BoundedRational::negate(a)
         } else {
             let threshold = MAX_SIZE as u64 * 3 / 4;
 
@@ -80,6 +80,8 @@ macro_rules! boundedrational_mul {
         }
     }};
 }
+
+pub(crate) use boundedrational_mul;
 
 // -----------------------------------------------------------------------------
 // BoundedRational Multiplication Implementation

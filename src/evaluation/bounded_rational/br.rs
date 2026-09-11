@@ -6,7 +6,6 @@ use num_traits::ToPrimitive;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
-// use std::ops::Add;
 
 /// Error returned when a `BoundedRational` is constructed with a zero denominator.
 #[derive(Clone, Debug)]
@@ -336,14 +335,26 @@ impl BoundedRational {
         }
     }
 
-    /// Returns `true` if this rational is equal to the integer `n`.
+    /// Returns true if this rational is equal to the integer n.
     ///
-    /// Checks whether `numerator == n * denominator`, which handles all sign
-    /// representations without needing to reduce first. For example, both
-    /// `1/1` and `-1/-1` satisfy `numerator == 1 * denominator`, and both
-    /// `-1/1` and `1/-1` satisfy `numerator == -1 * denominator`.
+    /// For 0, 1, and -1, the comparison uses shortcuts that avoid
+    /// multiplication. For other values, it checks whether
+    /// numerator == n * denominator, so the rational does not need to be
+    /// reduced first.
+    ///
+    /// The comparison also handles different sign representations. For example,
+    /// both 1/1 and -1/-1 are equal to 1, while both -1/1 and 1/-1
+    /// are equal to -1.
     pub fn equals(&self, n: &BigInt) -> bool {
-        self.numerator == n * &self.denominator
+        if *n == *ZERO {
+            self.numerator == *ZERO
+        } else if *n == *ONE {
+            self.numerator == self.denominator
+        } else if *n == *MINUS_ONE {
+            self.numerator == -&self.denominator
+        } else {
+            self.numerator == n * &self.denominator
+        }
     }
 
     /// Returns the reciprocal of `r`, formed by swapping numerator and
@@ -362,16 +373,16 @@ impl BoundedRational {
         })
     }
 
-    // /// Returns `r1 / r2`, computed as `r1 * inverse(r2)`.
-    // ///
-    // /// # Errors
-    // /// Returns `Err(ZeroDivisionError)` if `r2` is zero.
-    // pub fn divide(
-    //     r1: BoundedRational,
-    //     r2: BoundedRational,
-    // ) -> Result<BoundedRational, ZeroDivisionError> {
-    //     Ok(BoundedRational::multiply(r1, BoundedRational::inverse(r2)?))
-    // }
+    /// Returns `r1 / r2`, computed as `r1 * inverse(r2)`.
+    ///
+    /// # Errors
+    /// Returns `Err(ZeroDivisionError)` if `r2` is zero.
+    pub fn divide(
+        r1: BoundedRational,
+        r2: BoundedRational,
+    ) -> Result<BoundedRational, ZeroDivisionError> {
+        Ok(r1 * BoundedRational::inverse(r2)?)
+    }
 
     /// Returns the sign of this rational: `-1` if negative, `0` if zero, `1` if positive.
     ///
@@ -662,6 +673,7 @@ impl std::fmt::Display for BoundedRational {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::evaluation::bounded_rational::multiply::boundedrational_mul;
     use core::f64;
     use num_bigint::BigInt;
     use std::cmp::Ordering;
@@ -1287,27 +1299,27 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // // ── divide ────────────────────────────────────────────────────────────────
+    // ── divide ────────────────────────────────────────────────────────────────
 
-    // #[test]
-    // fn divide_basic() {
-    //     let r1 = BoundedRational::from_longs(1, 2).unwrap();
-    //     let r2 = BoundedRational::from_longs(1, 4).unwrap();
-    //     let quot = BoundedRational::divide(r1, r2)
-    //         .unwrap()
-    //         .reduce()
-    //         .positive_den();
-    //     assert_eq!(quot.numerator(), &BigInt::from(2));
-    //     assert_eq!(quot.denominator(), &BigInt::from(1));
-    // }
+    #[test]
+    fn divide_basic() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_longs(1, 4).unwrap();
+        let quot = BoundedRational::divide(r1, r2)
+            .unwrap()
+            .reduce()
+            .positive_den();
+        assert_eq!(quot.numerator(), &BigInt::from(2));
+        assert_eq!(quot.denominator(), &BigInt::from(1));
+    }
 
-    // #[test]
-    // fn divide_by_zero_errors() {
-    //     let r1 = BoundedRational::from_longs(1, 2).unwrap();
-    //     let r2 = BoundedRational::from_long(0);
-    //     let result = BoundedRational::divide(r1, r2);
-    //     assert!(result.is_err());
-    // }
+    #[test]
+    fn divide_by_zero_errors() {
+        let r1 = BoundedRational::from_longs(1, 2).unwrap();
+        let r2 = BoundedRational::from_long(0);
+        let result = BoundedRational::divide(r1, r2);
+        assert!(result.is_err());
+    }
 
     // ── signum ─────────────────────────────────────────────────────────
 
@@ -1627,19 +1639,19 @@ mod tests {
         assert_eq!(r.double_value(), f64::MAX);
     }
 
-    // #[test]
-    // fn double_value_overflow_returns_infinity() {
-    //     let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
-    //     let doubled = BoundedRational::multiply(max_r, BoundedRational::from_long(2));
-    //     assert_eq!(doubled.double_value(), f64::INFINITY);
-    // }
+    #[test]
+    fn double_value_overflow_returns_infinity() {
+        let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
+        let doubled = boundedrational_mul!(max_r, BoundedRational::from_long(2));
+        assert_eq!(doubled.double_value(), f64::INFINITY);
+    }
 
-    // #[test]
-    // fn double_value_negative_overflow_returns_negative_infinity() {
-    //     let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
-    //     let doubled = BoundedRational::multiply(max_r, BoundedRational::from_long(-2));
-    //     assert_eq!(doubled.double_value(), f64::NEG_INFINITY);
-    // }
+    #[test]
+    fn double_value_negative_overflow_returns_negative_infinity() {
+        let max_r = BoundedRational::value_of_double(f64::MAX).unwrap();
+        let doubled = boundedrational_mul!(max_r, BoundedRational::from_long(-2));
+        assert_eq!(doubled.double_value(), f64::NEG_INFINITY);
+    }
 
     // ── double_value: Normal / subnormal boundary ───────────────────────────
 
