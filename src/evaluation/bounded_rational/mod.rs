@@ -6,6 +6,7 @@ mod common_arithmetic_macros;
 
 mod add;
 mod br;
+mod multiply;
 mod subtract;
 #[cfg(test)]
 mod test_helpers;
