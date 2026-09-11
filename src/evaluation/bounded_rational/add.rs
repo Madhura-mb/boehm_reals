@@ -6,7 +6,7 @@ use std::iter::Sum;
 use std::mem;
 use std::ops::{Add, AddAssign};
 
-/// Returns the sum of `r1` and `r2`, possibly reduces.
+/// Returns the sum of `a` and `b`, possibly reduces.
 ///
 /// If either operand is exactly zero, the other operand is returned
 /// unchanged (aside from being passed through [`maybe_reduce`]), avoiding

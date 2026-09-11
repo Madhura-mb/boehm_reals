@@ -350,3 +350,31 @@ macro_rules! impl_sum_iter_type {
         }
     };
 }
+
+/// Implements `Product` for `$res`.
+/// The iterator item type is `T`.
+///
+/// Requires:
+///     $res: Mul<T, Output = $res>
+/// Starts with:
+///     $res::from_bigint(ONE.clone())
+/// and folds:
+///     zero
+///     zero op item1
+///     (zero op item1) op item2
+///     ...
+macro_rules! impl_product_iter_type {
+    ($res:ty) => {
+        impl<T> Product<T> for $res
+        where
+            $res: Mul<T, Output = $res>,
+        {
+            fn product<I>(iter: I) -> Self
+            where
+                I: Iterator<Item = T>,
+            {
+                iter.fold(<$res>::from_bigint(ONE.clone()), <$res as Mul<T>>::mul)
+            }
+        }
+    };
+}
