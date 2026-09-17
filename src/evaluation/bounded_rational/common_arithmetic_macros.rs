@@ -1,5 +1,8 @@
 #![allow(unused_macros)]
 
+/// In the documentation and macros below, `T` represents the
+/// `BoundedRational` type.
+///
 /// Forwards an owned-value assignment to the reference-based implementation.
 ///
 /// Generates:
@@ -321,6 +324,56 @@ macro_rules! forward_all_scalar_binop_to_val_val_commutative {
         forward_scalar_val_val_binop_commutative!(impl $imp<$scalar> for $res, $method);
         forward_all_scalar_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
     }
+}
+
+macro_rules! forward_val_val_binop {
+    (impl $imp:ident for $res:ty, $method:ident) => {
+        impl $imp<$res> for $res {
+            type Output = $res;
+
+            #[inline]
+            fn $method(self, other: $res) -> $res {
+                // forward to val-ref
+                $imp::$method(self, &other)
+            }
+        }
+    };
+}
+
+macro_rules! forward_val_ref_binop {
+    (impl $imp:ident for $res:ty, $method:ident) => {
+        impl $imp<&$res> for $res {
+            type Output = $res;
+
+            #[inline]
+            fn $method(self, other: &$res) -> $res {
+                // forward to ref-ref
+                $imp::$method(&self, other)
+            }
+        }
+    };
+}
+
+macro_rules! forward_ref_val_binop {
+    (impl $imp:ident for $res:ty, $method:ident) => {
+        impl $imp<$res> for &$res {
+            type Output = $res;
+
+            #[inline]
+            fn $method(self, other: $res) -> $res {
+                // forward to ref-ref
+                $imp::$method(self, &other)
+            }
+        }
+    };
+}
+
+macro_rules! forward_all_binop_to_ref_ref {
+    (impl $imp:ident for $res:ty, $method:ident) => {
+        forward_val_val_binop!(impl $imp for $res, $method);
+        forward_val_ref_binop!(impl $imp for $res, $method);
+        forward_ref_val_binop!(impl $imp for $res, $method);
+    };
 }
 
 /// Implements `Sum` for `$res`.

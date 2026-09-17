@@ -11,13 +11,13 @@ use std::ops::{Mul, MulAssign};
 /// # Shortcuts
 /// - If either argument equals 0, zero is returned immediately, skipping
 ///   multiplication entirely.
-/// - If either argument equals `1` (checked via [`equals`]), the other
+/// - If either argument equals `1` (checked via [`equals_to_bigint`]), the other
 ///   argument is returned immediately, skipping multiplication entirely.
-/// - If either argument equals `-1` (checked via [`equals`]), the other
+/// - If either argument equals `-1` (checked via [`equals_to_bigint`]), the other
 ///   argument is returned with its numerator negated, skipping
 ///   multiplication entirely.
 ///
-/// [`equals`]: BoundedRational::equals
+/// [`equals_to_bigint`]: BoundedRational::equals_to_bigint
 ///
 /// # Reduction heuristic
 /// Before multiplying, the combined bit sizes of all four components are
@@ -38,17 +38,17 @@ macro_rules! boundedrational_mul {
         let a = $a;
         let b = $b;
 
-        if a.equals(&ZERO) {
+        if a.equals_to_bigint(&ZERO) {
             BoundedRational::from_bigint(ZERO.clone())
-        } else if b.equals(&ZERO) {
+        } else if b.equals_to_bigint(&ZERO) {
             BoundedRational::from_bigint(ZERO.clone())
-        } else if a.equals(&ONE) {
+        } else if a.equals_to_bigint(&ONE) {
             b
-        } else if b.equals(&ONE) {
+        } else if b.equals_to_bigint(&ONE) {
             a
-        } else if a.equals(&MINUS_ONE) {
+        } else if a.equals_to_bigint(&MINUS_ONE) {
             BoundedRational::negate(b)
-        } else if b.equals(&MINUS_ONE) {
+        } else if b.equals_to_bigint(&MINUS_ONE) {
             BoundedRational::negate(a)
         } else {
             let threshold = MAX_SIZE as u64 * 3 / 4;
@@ -80,6 +80,8 @@ macro_rules! boundedrational_mul {
         }
     }};
 }
+
+pub(crate) use boundedrational_mul;
 
 // -----------------------------------------------------------------------------
 // BoundedRational Multiplication Implementation
