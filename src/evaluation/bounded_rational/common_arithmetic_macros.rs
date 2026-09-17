@@ -2,7 +2,7 @@
 
 /// In the documentation and macros below, `T` represents the
 /// `BoundedRational` type.
-
+///
 /// Forwards an owned-value assignment to the reference-based implementation.
 ///
 /// Generates:
