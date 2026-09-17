@@ -346,7 +346,7 @@ impl BoundedRational {
     /// The comparison also handles different sign representations. For example,
     /// both 1/1 and -1/-1 are equal to 1, while both -1/1 and 1/-1
     /// are equal to -1.
-    pub fn equals(&self, n: &BigInt) -> bool {
+    pub fn equals_to_bigint(&self, n: &BigInt) -> bool {
         if *n == *ZERO {
             self.numerator == *ZERO
         } else if *n == *ONE {
@@ -360,29 +360,11 @@ impl BoundedRational {
 
     /// Returns the reciprocal of `r`, formed by swapping numerator and
     /// denominator.
-    ///
-    /// # Errors
-    /// Returns `Err(ZeroDivisionError)` if `r`'s numerator is zero, since
-    /// the resulting denominator would be zero.
-    pub fn inverse(r: BoundedRational) -> Result<BoundedRational, ZeroDivisionError> {
-        if r.numerator == *ZERO {
-            return Err(ZeroDivisionError);
-        }
-        Ok(BoundedRational {
+    pub fn inverse(r: BoundedRational) -> BoundedRational {
+        BoundedRational {
             numerator: r.denominator,
             denominator: r.numerator,
-        })
-    }
-
-    /// Returns `r1 / r2`, computed as `r1 * inverse(r2)`.
-    ///
-    /// # Errors
-    /// Returns `Err(ZeroDivisionError)` if `r2` is zero.
-    pub fn divide(
-        r1: BoundedRational,
-        r2: BoundedRational,
-    ) -> Result<BoundedRational, ZeroDivisionError> {
-        Ok(r1 * BoundedRational::inverse(r2)?)
+        }
     }
 
     /// Returns the sign of this rational: `-1` if negative, `0` if zero, `1` if positive.
@@ -1331,38 +1313,9 @@ mod tests {
     #[test]
     fn inverse_negative_numerator() {
         let r = BoundedRational::from_longs(-2, 3).unwrap();
-        let inv = BoundedRational::inverse(r).unwrap();
+        let inv = BoundedRational::inverse(r);
         assert_eq!(inv.numerator(), &BigInt::from(3));
         assert_eq!(inv.denominator(), &BigInt::from(-2));
-    }
-
-    #[test]
-    fn inverse_zero_numerator_errors() {
-        let r = BoundedRational::from_long(0);
-        let result = BoundedRational::inverse(r);
-        assert!(result.is_err());
-    }
-
-    // ── divide ────────────────────────────────────────────────────────────────
-
-    #[test]
-    fn divide_basic() {
-        let r1 = BoundedRational::from_longs(1, 2).unwrap();
-        let r2 = BoundedRational::from_longs(1, 4).unwrap();
-        let quot = BoundedRational::divide(r1, r2)
-            .unwrap()
-            .reduce()
-            .positive_den();
-        assert_eq!(quot.numerator(), &BigInt::from(2));
-        assert_eq!(quot.denominator(), &BigInt::from(1));
-    }
-
-    #[test]
-    fn divide_by_zero_errors() {
-        let r1 = BoundedRational::from_longs(1, 2).unwrap();
-        let r2 = BoundedRational::from_long(0);
-        let result = BoundedRational::divide(r1, r2);
-        assert!(result.is_err());
     }
 
     // ── signum ─────────────────────────────────────────────────────────
