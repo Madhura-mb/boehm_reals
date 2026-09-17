@@ -32,7 +32,7 @@ fuzz_target!(|data: &[u8]| {
         let _ = left.compare_to(right);
         let _ = left.clone() + right.clone();
         let _ = left.clone() - right.clone();
-        let _ = BoundedRational::multiply(left.clone(), right.clone());
+        let _ = left.clone() * right.clone();
         let _ = BoundedRational::divide(left.clone(), right.clone());
     }
 
