@@ -23,7 +23,7 @@ impl BoundedRational {
     /// when `other` is zero.
     ///
     /// This is the non-panicking counterpart to the `boundedrational_div!`
-    /// macros (which go through [`self: inverse`] and panic on a zero divisor).
+    /// macro (which go through [`self: inverse`] and panic on a zero divisor).
     ///
     /// # Errors
     /// Returns `Err(ZeroDivisionError)` if `other` is zero. Otherwise
