@@ -1,6 +1,7 @@
 use super::br::BoundedRational;
 use super::multiply::boundedrational_mul;
 use crate::evaluation::constants::{MAX_SIZE, MINUS_ONE, ONE, ZERO};
+use crate::evaluation::errors::ZeroDivisionError;
 use crate::{IsizePromotion, UsizePromotion};
 use num_bigint::BigInt;
 use std::mem;
@@ -15,6 +16,27 @@ macro_rules! boundedrational_div {
         let r2: BoundedRational = $r2;
         boundedrational_mul!($r1, BoundedRational::inverse(r2))
     }};
+}
+
+impl BoundedRational {
+    /// Divides `self` by `other`, returning an error instead of panicking
+    /// when `other` is zero.
+    ///
+    /// This is the non-panicking counterpart to the `boundedrational_div!`
+    /// macros (which go through [`self: inverse`] and panic on a zero divisor).
+    ///
+    /// # Errors
+    /// Returns `Err(ZeroDivisionError)` if `other` is zero. Otherwise
+    /// returns `Ok` with the exact quotient.
+    pub fn checked_div(
+        &self,
+        other: &BoundedRational,
+    ) -> Result<BoundedRational, ZeroDivisionError> {
+        if *other.numerator() == *ZERO {
+            return Err(ZeroDivisionError);
+        }
+        Ok(self / other)
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -484,6 +506,22 @@ mod div_tests {
     use super::*;
     use crate::evaluation::bounded_rational::test_helpers::{assert_value, br};
     use num_bigint::BigInt;
+
+    // ── checked_div ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn checked_div_by_zero_returns_err() {
+        let r1 = BoundedRational::from_long(5); // 5/1
+        let r2 = BoundedRational::from_long(0); // 0/1
+        assert!(r1.checked_div(&r2).is_err());
+    }
+
+    #[test]
+    fn checked_div_by_zero_over_nonzero_denominator_returns_err() {
+        let r1 = BoundedRational::from_longs(3, 4).unwrap(); // 3/4
+        let r2 = BoundedRational::from_longs(0, 7).unwrap(); // 0/7, normalizes numerator to 0
+        assert!(r1.checked_div(&r2).is_err());
+    }
 
     // -------------------------------------------------------------------
     // Basic value/reference combinations

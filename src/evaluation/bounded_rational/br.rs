@@ -370,25 +370,6 @@ impl BoundedRational {
         }
     }
 
-    /// Divides `self` by `other`, returning an error instead of panicking
-    /// when `other` is zero.
-    ///
-    /// This is the non-panicking counterpart to the `divide!`/`checked_div!`
-    /// macros (which go through [`inverse`] and panic on a zero divisor).
-    ///
-    /// # Errors
-    /// Returns `Err(ZeroDivisionError)` if `other` is zero. Otherwise
-    /// returns `Ok` with the exact quotient.
-    pub fn checked_div(
-        &self,
-        other: &BoundedRational,
-    ) -> Result<BoundedRational, ZeroDivisionError> {
-        if other.numerator == *ZERO {
-            return Err(ZeroDivisionError);
-        }
-        Ok(self / other)
-    }
-
     /// Returns the sign of this rational: `-1` if negative, `0` if zero, `1` if positive.
     ///
     /// A fraction's sign is the sign of the numerator times the sign of the
@@ -1366,22 +1347,6 @@ mod tests {
     fn inverse_of_zero_from_value_of_long_panics() {
         let r = BoundedRational::value_of_long(0); // cached ZERO constant
         BoundedRational::inverse(r);
-    }
-
-    // ── checked_div ─────────────────────────────────────────────────────────
-
-    #[test]
-    fn checked_div_by_zero_returns_err() {
-        let r1 = BoundedRational::from_long(5); // 5/1
-        let r2 = BoundedRational::from_long(0); // 0/1
-        assert!(r1.checked_div(&r2).is_err());
-    }
-
-    #[test]
-    fn checked_div_by_zero_over_nonzero_denominator_returns_err() {
-        let r1 = BoundedRational::from_longs(3, 4).unwrap(); // 3/4
-        let r2 = BoundedRational::from_longs(0, 7).unwrap(); // 0/7, normalizes numerator to 0
-        assert!(r1.checked_div(&r2).is_err());
     }
 
     // ── signum ─────────────────────────────────────────────────────────
