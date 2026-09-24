@@ -15,4 +15,4 @@ proptest = "1"
 
 [[example]]
 name = "br_demo"
-path = "demos/br_demo.rs"
+path = "demos/bounded_rational/br_demo.rs"
