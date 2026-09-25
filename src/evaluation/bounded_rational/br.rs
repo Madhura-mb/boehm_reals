@@ -1915,6 +1915,24 @@ mod tests {
         assert_eq!(r.to_string_truncated(2), "-0.33");
     }
 
+    #[test]
+    fn to_string_truncated_negative_small_fraction_n0() {
+        let r = BoundedRational::from_longs(-1, 2).unwrap();
+        assert_eq!(r.to_string_truncated(0), "0");
+    }
+
+    #[test]
+    fn to_string_truncated_negative_small_fraction_n2() {
+        let r = BoundedRational::from_longs(-1, 1000).unwrap();
+        assert_eq!(r.to_string_truncated(2), "0.00");
+    }
+
+    #[test]
+    fn to_string_truncated_negative_value_n0_truncates_toward_zero() {
+        let r = BoundedRational::from_longs(-7, 2).unwrap();
+        assert_eq!(r.to_string_truncated(0), "-3");
+    }
+
     // ── Display ──────────────────────────────────────────────────────────────
 
     #[test]

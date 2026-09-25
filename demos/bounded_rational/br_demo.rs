@@ -153,23 +153,20 @@ fn main() {
     // 11. f64 Range Boundary / Near-Overflow Error
     println!("\n11. f64 Range Boundary / Near-Overflow Error");
     let x = 1.0_f64;
-    let y = 5.562684646268006e-309_f64;
+    let y = 5.56268464626801e-309_f64;
     let z = x / y;
     println!("Standard f64 (IEEE 754): ");
-    println!("1.0 / 5.562684646268006e-309 = {}", z); // Lands just under f64::MAX, not inf
+    println!("1.0 / 5.56268464626801e-309 = {}", z);
     println!("Bounded Rational Crate (Truncated to 16 digits after decimal point): ");
     let x = BoundedRational::from_long(1);
-    let y = BoundedRational::new(
-        BigInt::from(5562684646268006_i64),
-        BigInt::from(10).pow(324),
-    )
-    .unwrap();
+    let y =
+        BoundedRational::new(BigInt::from(556268464626801_i64), BigInt::from(10).pow(323)).unwrap();
     let z = x / y;
     println!(
-        "1.0 / 5.562684646268006e-309 = {}",
+        "1.0 / 5.56268464626801e-309 = {}",
         z.to_string_truncated(16)
     );
-    println!("1.0 / 5.562684646268006e-309 = {}", z);
+    println!("1.0 / 5.56268464626801e-309 = {}", z);
     println!("f64::MAX = {}", f64::MAX);
 
     // 12. Floating Point Catastrophic Cancellation Error
