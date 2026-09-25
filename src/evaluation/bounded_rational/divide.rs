@@ -806,6 +806,7 @@ mod div_tests {
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn div_ref_boundedrational_by_ref_u32() {
         let a = br(9, 2);
         let n: u32 = 3;

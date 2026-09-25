@@ -702,6 +702,7 @@ mod add_tests {
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn add_u32_ref_ref_combo() {
         let a = br(1, 2);
         let sum = &a + &5u32;
@@ -965,12 +966,14 @@ mod add_tests {
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn u32_ref_plus_br_val() {
         let sum = &5u32 + br(1, 2);
         assert_value(&sum, 11, 2);
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn u32_ref_plus_br_ref() {
         let a = br(1, 2);
         let sum = &5u32 + &a;
@@ -998,6 +1001,7 @@ mod add_tests {
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn u64_ref_plus_br_ref() {
         let a = br(1, 3);
         let sum = &7u64 + &a;
@@ -1039,6 +1043,7 @@ mod add_tests {
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn i32_ref_plus_br_ref() {
         let a = br(1, 2);
         let sum = &(-3i32) + &a;
@@ -1081,6 +1086,7 @@ mod add_tests {
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn i128_ref_plus_br_val() {
         let sum = &(-3i128) + br(1, 2);
         assert_value(&sum, -5, 2);
