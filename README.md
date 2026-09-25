@@ -84,8 +84,6 @@ NOTE: The roadmap is not complete yet. Some phases are defined, and more will be
 
 ---
 
----
-
 ## License
  
 Licensed under the [MIT License](LICENSE).
