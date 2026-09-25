@@ -599,6 +599,14 @@ impl BoundedRational {
             den_abs = -den_abs;
         }
 
+        let sign = if self.signum() < 0 { "-" } else { "" };
+
+        if n == 0 {
+            let digits = (num_abs / den_abs).to_string();
+            let sign = if digits == "0" { "" } else { sign };
+            return format!("{}{}", sign, digits);
+        }
+
         let mut digits = (num_abs * scale / den_abs).to_string();
         let n = n as usize;
         let mut len = digits.len();
@@ -607,7 +615,9 @@ impl BoundedRational {
             len = n + 1;
         }
 
-        let sign = if self.signum() < 0 { "-" } else { "" };
+        let is_zero = digits.chars().all(|c| c == '0');
+        let sign = if is_zero { "" } else { sign };
+
         format!("{}{}.{}", sign, &digits[..len - n], &digits[len - n..])
     }
 }
@@ -1895,7 +1905,7 @@ mod tests {
     #[test]
     fn to_string_truncated_zero_precision() {
         let r = BoundedRational::from_long(5);
-        assert_eq!(r.to_string_truncated(0), "5.");
+        assert_eq!(r.to_string_truncated(0), "5");
     }
 
     #[test]
@@ -1903,6 +1913,24 @@ mod tests {
         // 1/-3 is negative, even though signum uses the raw (unreduced) form.
         let r = BoundedRational::from_longs(1, -3).unwrap();
         assert_eq!(r.to_string_truncated(2), "-0.33");
+    }
+
+    #[test]
+    fn to_string_truncated_negative_small_fraction_n0() {
+        let r = BoundedRational::from_longs(-1, 2).unwrap();
+        assert_eq!(r.to_string_truncated(0), "0");
+    }
+
+    #[test]
+    fn to_string_truncated_negative_small_fraction_n2() {
+        let r = BoundedRational::from_longs(-1, 1000).unwrap();
+        assert_eq!(r.to_string_truncated(2), "0.00");
+    }
+
+    #[test]
+    fn to_string_truncated_negative_value_n0_truncates_toward_zero() {
+        let r = BoundedRational::from_longs(-7, 2).unwrap();
+        assert_eq!(r.to_string_truncated(0), "-3");
     }
 
     // ── Display ──────────────────────────────────────────────────────────────

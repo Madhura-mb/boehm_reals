@@ -22,3 +22,7 @@ num-traits = "0.2"
 
 [dev-dependencies]
 proptest = "1"
+
+[[example]]
+name = "br_demo"
+path = "demos/bounded_rational/br_demo.rs"
