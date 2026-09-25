@@ -1,14 +1,15 @@
 [package]
-name = "boehm_reals"
+name = "boehm-reals"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "Exact real number arithmetic based on Hans-J. Boehm's constructive reals"
 license = "MIT"
 authors = ["Madhura-mb"]
 repository = "https://github.com/Madhura-mb/boehm_reals"
-documentation = "https://docs.rs/boehm_reals"
+documentation = "https://docs.rs/boehm-reals"
 readme = "README.md"
-keywords = ["real", "arithmetic", "exact", "constructive", "precision"]
+keywords = ["real", "arithmetic", "exact", "precision", "numeric"]
 categories = ["mathematics", "science"]
 include = ["src/**/*.rs", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
 

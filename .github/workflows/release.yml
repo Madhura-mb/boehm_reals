@@ -1,4 +1,4 @@
-# Release workflow for the boehm_reals library crate.
+# Release workflow for the boehm-reals library crate.
 #
 # Triggered by pushing a version tag such as "v0.1.0" or "v0.2.0-rc.1":
 #
@@ -34,7 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Check tag matches Cargo.toml version
         run: |
-          crate_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "boehm_reals") | .version')"
+          crate_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "boehm-reals") | .version')"
           tag_version="${GITHUB_REF_NAME#v}"
           if [ "$crate_version" != "$tag_version" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $crate_version"
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: crates-io
-      url: https://crates.io/crates/boehm_reals
+      url: https://crates.io/crates/boehm-reals
     permissions:
       id-token: write
       contents: read

@@ -11,7 +11,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-boehm_reals = { path = ".." }
+boehm-reals = { path = ".." }
 
 [[bin]]
 name = "bounded_rational"

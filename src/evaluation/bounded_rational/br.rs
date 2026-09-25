@@ -403,7 +403,7 @@ impl BoundedRational {
     ///    is positive (or zero), we already know the answer and can skip the
     ///    expensive math entirely.
     /// 2. If the signs match, it cross-multiplies: `a/b` vs `c/d` becomes
-    ///    comparing `a*d` vs `c*b`. via [`cross_multiply`](Self::cross_multiply)
+    ///    comparing `a*d` vs `c*b`. via `cross_multiply`
     ///    rather than the raw `*` operator, so that a numerator or
     ///    denominator of `1`/`-1` (by far the most common case — e.g. either
     ///    side being a plain integer) is handled without a full `BigInt`
@@ -437,7 +437,7 @@ impl BoundedRational {
 
     /// Returns this value as an `i64`, provided it is a whole number.
     ///
-    /// The value is reduced first via [`reduce`]; if the reduced
+    /// The value is reduced first via [`reduce`](Self::reduce); if the reduced
     /// denominator isn't `1` the value has a genuine fractional part and
     /// isn't representable as an integer.
     ///
@@ -462,8 +462,8 @@ impl BoundedRational {
     ///
     /// # Fast path
     /// The value is first reduced to lowest terms with a positive
-    /// denominator via [`reduce`] + [`positive_den`]. If the resulting
-    /// denominator is `1` (i.e. this value is a whole number), the numerator
+    /// denominator via [`reduce`](Self::reduce) +
+    /// [`positive_den`](Self::positive_den). If the resulting denominator is `1` (i.e. this value is a whole number), the numerator
     /// is converted to `f64` directly via `BigInt`'s built-in conversion,
     /// skipping the manual bit-manipulation path entirely.
     ///
