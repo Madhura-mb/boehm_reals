@@ -1,4 +1,5 @@
 use boehm_reals::evaluation::bounded_rational::BoundedRational;
+use num_bigint::BigInt;
 
 fn main() {
     println!("--- IEEE 754 f64 vs Boehm's Real Bounded Rational Precision Demo ---");
@@ -52,8 +53,8 @@ fn main() {
     let z = x - y - w;
     println!("0.3 - 0.2 - 0.1 = {}", z.to_string_truncated(33));
 
-    // 4. Multiplicative Expansion Error
-    println!("\n4. Multiplicative Expansion Error");
+    // 4. Multiplicative Rounding Error
+    println!("\n4. Multiplicative Rounding Error");
     let x = 0.15_f64;
     let y = 3_f64;
     let z = x * y;
@@ -91,8 +92,8 @@ fn main() {
     let z = x * &y - y;
     println!("1.005 * 100 - 100 = {}", z.to_string_truncated(16));
 
-    // 7. Distributive Discrepancy
-    println!("\n7. Distributive Discrepancy");
+    // 7. Fractional Multiplication Precision Loss
+    println!("\n7. Fractional Multiplication Precision Loss");
     let x = 0.1_f64;
     let y = 0.1_f64;
     let z = x * y;
@@ -104,8 +105,8 @@ fn main() {
     let z = x * y;
     println!("0.1 * 0.1 = {}", z.to_string_truncated(18));
 
-    // 8. Large Number Integer Truncation
-    println!("\n8. Large Number Integer Truncation");
+    // 8. Large Integer Precision Loss
+    println!("\n8. Large Integer Precision Loss");
     let x = 12345678901234567_f64;
     let y = 12345678901234560_f64;
     let z = x - y;
@@ -134,5 +135,65 @@ fn main() {
     println!(
         "10000000000000000 + 1 - 10000000000000000 = {}",
         z.int_value().unwrap()
+    );
+
+    // 10. Floating Point Division Error
+    println!("\n10. Floating Point Division Error");
+    let x = 10_f64;
+    let y = 3_f64;
+    let z = x / y;
+    println!("Standard f64 (IEEE 754): ");
+    println!("10 / 3 = {}", z);
+    println!("Bounded Rational Crate: ");
+    let x = BoundedRational::from_long(10);
+    let y = BoundedRational::from_long(3);
+    let z = x / y;
+    println!("10 / 3 = {}", z.to_string_truncated(16));
+
+    // 11. f64 Range Boundary / Near-Overflow Error
+    println!("\n11. f64 Range Boundary / Near-Overflow Error");
+    let x = 1.0_f64;
+    let y = 5.562684646268006e-309_f64;
+    let z = x / y;
+    println!("Standard f64 (IEEE 754): ");
+    println!("1.0 / 5.562684646268006e-309 = {}", z); // Lands just under f64::MAX, not inf
+    println!("Bounded Rational Crate: ");
+    let x = BoundedRational::from_long(1);
+    let y = BoundedRational::new(
+        BigInt::from(5562684646268006_i64),
+        BigInt::from(10).pow(324),
+    )
+    .unwrap();
+    let z = x / y;
+    println!(
+        "1.0 / 5.562684646268006e-309 = {}",
+        z.to_string_truncated(16)
+    );
+    println!("1.0 / 5.562684646268006e-309 = {}", z);
+    println!("f64::MAX = {}", f64::MAX);
+
+    // 12. Floating Point Catastrophic Cancellation Error
+    println!("\n12. Floating Point Catastrophic Cancellation Error");
+    // 17976931348623157 * 10^292 is 1.7976931348623157e308
+    let x = 1.7976931348623157e308_f64;
+    let y = 1.7976931348623156e308_f64;
+    let z = x - y;
+    println!("Standard f64 (IEEE 754): ");
+    println!("1.7976931348623157e308 - 1.7976931348623156e308 = {}", z);
+    println!("Bounded Rational Crate: ");
+    let x = BoundedRational::new(
+        BigInt::from(17976931348623157_i64) * BigInt::from(10).pow(292),
+        BigInt::from(1),
+    )
+    .unwrap();
+    let y = BoundedRational::new(
+        BigInt::from(17976931348623156_i64) * BigInt::from(10).pow(292),
+        BigInt::from(1),
+    )
+    .unwrap();
+    let z = x - y;
+    println!(
+        "1.7976931348623157e308 - 1.7976931348623156e308 = {}",
+        z.to_string_truncated(0)
     );
 }

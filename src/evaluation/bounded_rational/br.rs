@@ -599,6 +599,13 @@ impl BoundedRational {
             den_abs = -den_abs;
         }
 
+        let sign = if self.signum() < 0 { "-" } else { "" };
+
+        if n == 0 {
+            let digits = (num_abs / den_abs).to_string();
+            return format!("{}{}", sign, digits);
+        }
+
         let mut digits = (num_abs * scale / den_abs).to_string();
         let n = n as usize;
         let mut len = digits.len();
@@ -607,7 +614,6 @@ impl BoundedRational {
             len = n + 1;
         }
 
-        let sign = if self.signum() < 0 { "-" } else { "" };
         format!("{}{}.{}", sign, &digits[..len - n], &digits[len - n..])
     }
 }
@@ -1892,7 +1898,7 @@ mod tests {
     #[test]
     fn to_string_truncated_zero_precision() {
         let r = BoundedRational::from_long(5);
-        assert_eq!(r.to_string_truncated(0), "5.");
+        assert_eq!(r.to_string_truncated(0), "5");
     }
 
     #[test]
