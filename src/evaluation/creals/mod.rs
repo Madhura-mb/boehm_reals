@@ -14,4 +14,4 @@ mod string_float_rep;
 pub use string_float_rep::StringFloatRep;
 
 mod cr;
-pub use cr::CR;
+pub use cr::{CR, CRError, CachedCR};

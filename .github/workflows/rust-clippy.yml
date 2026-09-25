@@ -42,12 +42,17 @@ jobs:
         run: cargo install clippy-sarif sarif-fmt
 
       - name: Run rust-clippy
+        # `shell: bash` runs with `-eo pipefail`, so a clippy failure fails
+        # the step instead of being masked by sarif-fmt's exit status.
+        shell: bash
         run:
           cargo clippy
           --all-features
+          --all-targets
           --message-format=json -- -D warnings | clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
 
       - name: Upload analysis results to GitHub
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: rust-clippy-results.sarif
