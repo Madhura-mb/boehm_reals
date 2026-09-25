@@ -819,6 +819,7 @@ mod mul_tests {
     }
 
     #[test]
+    #[allow(clippy::erasing_op)] // multiplying by zero is the point of this test
     fn mul_u64_scalar_zero() {
         let a = br(5, 7);
         let product = a * 0u64;

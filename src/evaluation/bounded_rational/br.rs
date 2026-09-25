@@ -709,7 +709,6 @@ mod tests {
     use std::collections::HashSet;
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    use std::i64;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -1517,33 +1516,36 @@ mod tests {
     // ── PartialOrd / Ord ─────────────────────────────────────────────────────────
 
     #[test]
+    #[allow(clippy::nonminimal_bool)] // each comparison operator is tested directly
     fn partial_ord_greater_than() {
         let r1 = BoundedRational::from_longs(2, 3).unwrap();
         let r2 = BoundedRational::from_longs(1, 2).unwrap();
-        assert_eq!(r1 > r2, true);
-        assert_eq!(r1 >= r2, true);
-        assert_eq!(r1 < r2, false);
-        assert_eq!(r1 <= r2, false);
+        assert!(r1 > r2);
+        assert!(r1 >= r2);
+        assert!(!(r1 < r2));
+        assert!(!(r1 <= r2));
     }
 
     #[test]
+    #[allow(clippy::nonminimal_bool)] // each comparison operator is tested directly
     fn partial_ord_less_than() {
         let r1 = BoundedRational::from_longs(1, 3).unwrap();
         let r2 = BoundedRational::from_longs(1, 2).unwrap();
-        assert_eq!(r1 < r2, true);
-        assert_eq!(r1 <= r2, true);
-        assert_eq!(r1 > r2, false);
-        assert_eq!(r1 >= r2, false);
+        assert!(r1 < r2);
+        assert!(r1 <= r2);
+        assert!(!(r1 > r2));
+        assert!(!(r1 >= r2));
     }
 
     #[test]
+    #[allow(clippy::nonminimal_bool)] // each comparison operator is tested directly
     fn partial_ord_equal_different_representation() {
         let r1 = BoundedRational::from_longs(1, 3).unwrap();
         let r2 = BoundedRational::from_longs(2, 6).unwrap();
-        assert_eq!(r1 <= r2, true);
-        assert_eq!(r1 >= r2, true);
-        assert_eq!(r1 < r2, false);
-        assert_eq!(r1 > r2, false);
+        assert!(r1 <= r2);
+        assert!(r1 >= r2);
+        assert!(!(r1 < r2));
+        assert!(!(r1 > r2));
     }
 
     #[test]
@@ -1551,10 +1553,10 @@ mod tests {
         let r1 = BoundedRational::from_longs(-1, 2).unwrap();
         let r2 = BoundedRational::from_longs(-1, 3).unwrap();
         // -1/2 < -1/3
-        assert_eq!(r1 < r2, true);
-        assert_eq!(r1 <= r2, true);
-        assert_eq!(r2 > r1, true);
-        assert_eq!(r2 >= r1, true);
+        assert!(r1 < r2);
+        assert!(r1 <= r2);
+        assert!(r2 > r1);
+        assert!(r2 >= r1);
     }
 
     #[test]
@@ -1562,27 +1564,28 @@ mod tests {
         let r1 = BoundedRational::from_longs(1, -2).unwrap();
         let r2 = BoundedRational::from_longs(1, 3).unwrap();
         // 1/-2 = -1/2 < 1/3
-        assert_eq!(r1 < r2, true);
-        assert_eq!(r1 <= r2, true);
-        assert_eq!(r2 > r1, true);
-        assert_eq!(r2 >= r1, true);
+        assert!(r1 < r2);
+        assert!(r1 <= r2);
+        assert!(r2 > r1);
+        assert!(r2 >= r1);
     }
 
     #[test]
+    #[allow(clippy::nonminimal_bool)] // each comparison operator is tested directly
     fn partial_ord_against_zero() {
         let positive = BoundedRational::from_longs(1, 2).unwrap();
         let negative = BoundedRational::from_longs(-1, 2).unwrap();
         let zero = BoundedRational::from_bigint(ZERO.clone());
 
-        assert_eq!(negative < zero, true);
-        assert_eq!(negative <= zero, true);
-        assert_eq!(negative > zero, false);
-        assert_eq!(negative >= zero, false);
+        assert!(negative < zero);
+        assert!(negative <= zero);
+        assert!(!(negative > zero));
+        assert!(!(negative >= zero));
 
-        assert_eq!(positive > zero, true);
-        assert_eq!(positive >= zero, true);
-        assert_eq!(positive < zero, false);
-        assert_eq!(positive <= zero, false);
+        assert!(positive > zero);
+        assert!(positive >= zero);
+        assert!(!(positive < zero));
+        assert!(!(positive <= zero));
     }
 
     #[test]

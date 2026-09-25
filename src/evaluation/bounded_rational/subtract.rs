@@ -714,6 +714,7 @@ mod sub_tests {
     }
 
     #[test]
+    #[allow(clippy::op_ref)] // exercises the by-reference operator impl
     fn sub_ref_boundedrational_minus_ref_u32() {
         let a = br(7, 2);
         let n: u32 = 3;
