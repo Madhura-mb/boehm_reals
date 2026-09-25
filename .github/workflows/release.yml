@@ -10,7 +10,7 @@
 #
 # NOTE: crates.io Trusted Publishing can only be configured for a crate that
 # already exists, so the very first release (0.1.0) must be published manually
-# with `cargo publish`. See README.md#releasing.
+# with `cargo publish`. See RELEASING.md.
 
 name: Release
 permissions:
