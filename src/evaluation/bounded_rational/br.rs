@@ -603,6 +603,7 @@ impl BoundedRational {
 
         if n == 0 {
             let digits = (num_abs / den_abs).to_string();
+            let sign = if digits == "0" { "" } else { sign };
             return format!("{}{}", sign, digits);
         }
 
@@ -613,6 +614,9 @@ impl BoundedRational {
             digits = "0".repeat(n + 1 - len) + &digits;
             len = n + 1;
         }
+
+        let is_zero = digits.chars().all(|c| c == '0');
+        let sign = if is_zero { "" } else { sign };
 
         format!("{}{}.{}", sign, &digits[..len - n], &digits[len - n..])
     }

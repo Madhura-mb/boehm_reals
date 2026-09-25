@@ -112,7 +112,7 @@ f64::MAX = 179769313486231570000000000000000000000000000000000000000000000000000
 ```
 
 
-**Example 12:** `x` and `y` are two adjacent representable f64 values near the top of the exponent range, where doubles are spaced extremely far apart (a huge ULP), so subtracting two "adjacent" values gives a difference far larger than the true mathematical answer instead of something small. `BoundedRational` computes the exact big-integer subtraction `17976931348623157×10^292 − 17976931348623156×10^292 = 1×10^292`, showing how catastrophic cancellation in f64 can be off by orders of magnitude, not just imprecise.
+**Example 12:** `1.7976931348623157e308` and `1.7976931348623156e308` are two adjacent representable f64 values near the top of the exponent range, where doubles are spaced extremely far apart (a huge ULP), so subtracting two "adjacent" values gives a difference far larger than the true mathematical answer instead of something small. `BoundedRational` computes the exact big-integer subtraction `17976931348623157×10^292 − 17976931348623156×10^292 = 1×10^292`, showing how catastrophic cancellation in f64 can be off by roughly 2x (~1.9958×10^292), not just imprecise.
 ```
 12. Floating Point Catastrophic Cancellation Error
 Standard f64 (IEEE 754): 
