@@ -2,6 +2,15 @@
 name = "boehm_reals"
 version = "0.1.0"
 edition = "2024"
+description = "Exact real number arithmetic based on Hans-J. Boehm's constructive reals"
+license = "MIT"
+authors = ["Madhura-mb"]
+repository = "https://github.com/Madhura-mb/boehm_reals"
+documentation = "https://docs.rs/boehm_reals"
+readme = "README.md"
+keywords = ["real", "arithmetic", "exact", "constructive", "precision"]
+categories = ["mathematics", "science"]
+include = ["src/**/*.rs", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
 
 [dependencies]
 num-bigint = "0.5"
