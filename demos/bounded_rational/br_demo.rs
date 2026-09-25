@@ -11,7 +11,7 @@ fn main() {
     let z = x + y;
     println!("Standard f64 (IEEE 754): ");
     println!("0.1 + 0.2 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 17 digits after decimal point): ");
     let x = BoundedRational::from_longs(1, 10).unwrap();
     let y = BoundedRational::from_longs(2, 10).unwrap();
     let z = x + y;
@@ -28,7 +28,7 @@ fn main() {
         z
     );
     println!("0.1 * 10 = {}", a);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 1 digit after decimal point): ");
     let x = BoundedRational::from_longs(1, 10).unwrap();
     let z = &x + &x + &x + &x + &x + &x + &x + &x + &x + &x;
     let a = x * BoundedRational::from_long(10);
@@ -46,7 +46,7 @@ fn main() {
     let z = x - y - w;
     println!("Standard f64 (IEEE 754): ");
     println!("0.3 - 0.2 - 0.1 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 33 digits after decimal point): ");
     let x = BoundedRational::from_longs(3, 10).unwrap();
     let y = BoundedRational::from_longs(2, 10).unwrap();
     let w = BoundedRational::from_longs(1, 10).unwrap();
@@ -60,7 +60,7 @@ fn main() {
     let z = x * y;
     println!("Standard f64 (IEEE 754): ");
     println!("0.15 * 3 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 17 digits after decimal point): ");
     let x = BoundedRational::from_longs(15, 100).unwrap();
     let y = BoundedRational::from_long(3);
     let z = x * y;
@@ -73,7 +73,7 @@ fn main() {
     let z = x + y;
     println!("Standard f64 (IEEE 754): ");
     println!("0.7 + 0.1 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 16 digits after decimal point): ");
     let x = BoundedRational::from_longs(7, 10).unwrap();
     let y = BoundedRational::from_longs(1, 10).unwrap();
     let z = x + y;
@@ -86,7 +86,7 @@ fn main() {
     let z = x * y - y;
     println!("Standard f64 (IEEE 754): ");
     println!("1.005 * 100 - 100 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 16 digits after decimal point): ");
     let x = BoundedRational::from_longs(1005, 1000).unwrap();
     let y = BoundedRational::from_long(100);
     let z = x * &y - y;
@@ -99,7 +99,7 @@ fn main() {
     let z = x * y;
     println!("Standard f64 (IEEE 754): ");
     println!("0.1 * 0.1 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 18 digits after decimal point): ");
     let x = BoundedRational::from_longs(1, 10).unwrap();
     let y = BoundedRational::from_longs(1, 10).unwrap();
     let z = x * y;
@@ -112,13 +112,13 @@ fn main() {
     let z = x - y;
     println!("Standard f64 (IEEE 754): ");
     println!("12345678901234567 - 12345678901234560 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 0 digits after decimal point): ");
     let x = BoundedRational::from_long(12345678901234567);
     let y = BoundedRational::from_long(12345678901234560);
     let z = x - y;
     println!(
         "12345678901234567 - 12345678901234560 = {}",
-        z.int_value().unwrap()
+        z.to_string_truncated(0)
     );
 
     // 9. Floating-Point Precision Loss
@@ -128,13 +128,13 @@ fn main() {
     let z = x + y - x;
     println!("Standard f64 (IEEE 754): ");
     println!("10000000000000000 + 1 - 10000000000000000 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 0 digits after decimal point): ");
     let x = BoundedRational::from_long(10_000_000_000_000_000);
     let y = BoundedRational::from_long(1);
     let z = &x + y - x;
     println!(
         "10000000000000000 + 1 - 10000000000000000 = {}",
-        z.int_value().unwrap()
+        z.to_string_truncated(0)
     );
 
     // 10. Floating Point Division Error
@@ -144,7 +144,7 @@ fn main() {
     let z = x / y;
     println!("Standard f64 (IEEE 754): ");
     println!("10 / 3 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 16 digits after decimal point): ");
     let x = BoundedRational::from_long(10);
     let y = BoundedRational::from_long(3);
     let z = x / y;
@@ -157,7 +157,7 @@ fn main() {
     let z = x / y;
     println!("Standard f64 (IEEE 754): ");
     println!("1.0 / 5.562684646268006e-309 = {}", z); // Lands just under f64::MAX, not inf
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 16 digits after decimal point): ");
     let x = BoundedRational::from_long(1);
     let y = BoundedRational::new(
         BigInt::from(5562684646268006_i64),
@@ -180,7 +180,7 @@ fn main() {
     let z = x - y;
     println!("Standard f64 (IEEE 754): ");
     println!("1.7976931348623157e308 - 1.7976931348623156e308 = {}", z);
-    println!("Bounded Rational Crate: ");
+    println!("Bounded Rational Crate (Truncated to 0 digits after decimal point): ");
     let x = BoundedRational::new(
         BigInt::from(17976931348623157_i64) * BigInt::from(10).pow(292),
         BigInt::from(1),
