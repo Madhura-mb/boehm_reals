@@ -40,13 +40,13 @@ The library follows the two-layer architecture described in Boehm (2020).
  
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  ConstructiveReal                   │  ← planned
+│                  ConstructiveReal                   │  ← active
 │  Lazy precision-on-demand representation            │
 │  Transcendental functions: π, e, sin, log, sqrt …   │
 └────────────────────┬────────────────────────────────┘
                      │ falls back to ↓ when exact
 ┌────────────────────▼────────────────────────────────┐
-│                  BoundedRational                    │  ← active
+│                  BoundedRational                    │  ← completed
 │  p / q  (BigInt numerator + denominator)            │
 │  Returns None when bits(p) + bits(q) > MAX_SIZE     │
 └─────────────────────────────────────────────────────┘
