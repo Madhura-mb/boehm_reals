@@ -33,10 +33,8 @@ impl BoundedRational {
         &self,
         other: &BoundedRational,
     ) -> Result<BoundedRational, ZeroDivisionError> {
-        if *other.numerator() == *ZERO {
-            return Err(ZeroDivisionError);
-        }
-        Ok(self / other)
+        let inv = BoundedRational::inverse(other.clone())?;
+        Ok(boundedrational_mul!(self.clone(), inv))
     }
 }
 
