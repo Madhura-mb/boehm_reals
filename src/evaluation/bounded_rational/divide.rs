@@ -14,7 +14,8 @@ use std::ops::{Div, DivAssign};
 macro_rules! boundedrational_div {
     ($r1:expr, $r2:expr) => {{
         let r2: BoundedRational = $r2;
-        boundedrational_mul!($r1, BoundedRational::inverse(r2))
+        let inv = BoundedRational::inverse(r2).expect("attempt to divide by zero");
+        boundedrational_mul!($r1, inv)
     }};
 }
 

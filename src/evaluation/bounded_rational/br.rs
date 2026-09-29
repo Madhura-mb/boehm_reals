@@ -360,14 +360,14 @@ impl BoundedRational {
 
     /// Returns the reciprocal of `r`, formed by swapping numerator and
     /// denominator.
-    pub fn inverse(r: BoundedRational) -> BoundedRational {
+    pub fn inverse(r: BoundedRational) -> Result<BoundedRational, ZeroDivisionError> {
         if r.numerator == *ZERO {
-            panic!("attempt to divide by zero");
+            return Err(ZeroDivisionError);
         }
-        BoundedRational {
+        Ok(BoundedRational {
             numerator: r.denominator,
             denominator: r.numerator,
-        }
+        })
     }
 
     /// Returns the sign of this rational: `-1` if negative, `0` if zero, `1` if positive.
@@ -1325,37 +1325,37 @@ mod tests {
     #[test]
     fn inverse_negative_numerator() {
         let r = BoundedRational::from_longs(-2, 3).unwrap();
-        let inv = BoundedRational::inverse(r);
+        let inv = BoundedRational::inverse(r).unwrap();
         assert_eq!(inv.numerator(), &BigInt::from(3));
         assert_eq!(inv.denominator(), &BigInt::from(-2));
     }
 
     #[test]
-    #[should_panic(expected = "attempt to divide by zero")]
     fn inverse_of_zero_panics() {
         let r = BoundedRational::from_long(0); // 0/1
-        BoundedRational::inverse(r);
+        let result = BoundedRational::inverse(r);
+        assert!(matches!(result, Err(ZeroDivisionError)));
     }
 
     #[test]
-    #[should_panic(expected = "attempt to divide by zero")]
     fn inverse_of_zero_over_nonzero_denominator_panics() {
         let r = BoundedRational::from_longs(0, 5).unwrap(); // 0/5, normalizes numerator to 0
-        BoundedRational::inverse(r);
+        let result = BoundedRational::inverse(r);
+        assert!(matches!(result, Err(ZeroDivisionError)));
     }
 
     #[test]
-    #[should_panic(expected = "attempt to divide by zero")]
     fn inverse_of_negated_zero_panics() {
         let r = BoundedRational::negate(BoundedRational::from_long(0)); // -0 -> 0/1
-        BoundedRational::inverse(r);
+        let result = BoundedRational::inverse(r);
+        assert!(matches!(result, Err(ZeroDivisionError)));
     }
 
     #[test]
-    #[should_panic(expected = "attempt to divide by zero")]
     fn inverse_of_zero_from_value_of_long_panics() {
         let r = BoundedRational::value_of_long(0); // cached ZERO constant
-        BoundedRational::inverse(r);
+        let result = BoundedRational::inverse(r);
+        assert!(matches!(result, Err(ZeroDivisionError)));
     }
 
     // ── signum ─────────────────────────────────────────────────────────
