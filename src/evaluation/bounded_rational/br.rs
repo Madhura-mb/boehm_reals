@@ -562,7 +562,7 @@ impl BoundedRational {
         let big_mantissa = (quotient + rounding) >> extra_bits.max(0) as usize;
 
         let mantissa = big_mantissa.to_u64().unwrap_or(0);
-        
+
         // mantissa includes the hidden bit for normals
         let bits = mantissa + (((exponent + 1022) as u64) << 52);
 
@@ -720,7 +720,6 @@ impl Neg for &BoundedRational {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::f64;
     use num_bigint::BigInt;
     use std::cmp::Ordering;
     use std::collections::HashSet;
