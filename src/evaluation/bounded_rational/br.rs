@@ -561,7 +561,7 @@ impl BoundedRational {
         let rounding = BigInt::from(1) << (extra_bits - 1).max(0) as usize;
         let big_mantissa = (quotient + rounding) >> extra_bits.max(0) as usize;
 
-        let mantissa = big_mantissa.to_u64().unwrap_or(0);
+        let mantissa = big_mantissa.to_u64().expect("mantissa should fit in u64");
 
         // mantissa includes the hidden bit for normals
         let bits = mantissa + (((exponent + 1022) as u64) << 52);
