@@ -551,7 +551,7 @@ impl BoundedRational {
             exponent -= 1;
         } else {
             extra_bits += (-1022 - exponent) + 1;
-            exponent = -1023;
+            exponent = -1022;
         }
 
         if exponent > 1023 {
@@ -561,8 +561,15 @@ impl BoundedRational {
         let rounding = BigInt::from(1) << (extra_bits - 1).max(0) as usize;
         let big_mantissa = (quotient + rounding) >> extra_bits.max(0) as usize;
 
-        let mantissa = big_mantissa.to_i64().unwrap_or(0);
-        let bits: u64 = (mantissa as u64 & ((1u64 << 52) - 1)) | (((exponent + 1023) as u64) << 52);
+        let mantissa = big_mantissa.to_u64().unwrap_or(0);
+        
+        // mantissa includes the hidden bit for normals
+        let bits = mantissa + (((exponent + 1022) as u64) << 52);
+
+        // Exponent field reached 0x7FF: the rounded value overflowed.
+        if bits >= 0x7FF0_0000_0000_0000 {
+            return f64::INFINITY;
+        }
         f64::from_bits(bits)
     }
 
@@ -1859,6 +1866,23 @@ mod tests {
         assert_eq!(r.double_value(), -f64::from_bits(1));
     }
 
+    #[test]
+    fn double_value_rounds_up_to_one() {
+        // (10^17 - 1) / 10^17 = 0.99999999999999999
+        let ten_17 = BigInt::from(10u32).pow(17);
+        let r = BoundedRational::new(&ten_17 - BigInt::from(1), ten_17).unwrap();
+        assert_eq!(r.double_value(), 1.0);
+    }
+
+    #[test]
+    fn double_value_carry_into_next_binade() {
+        // (2^54 - 1) / 2^53 = 2 - 2^-53, a tie that rounds away from zero to 2.0
+        let n = (BigInt::from(1) << 54usize) - BigInt::from(1);
+        let d = BigInt::from(1) << 53usize;
+        let r = BoundedRational::new(n, d).unwrap();
+        assert_eq!(r.double_value(), 2.0);
+    }
+
     // ── double_value: Huge BigInts ───────────────────────────────────────────
 
     #[test]
@@ -1879,6 +1903,23 @@ mod tests {
         let denominator = &factor * BigInt::from(2);
         let r = BoundedRational::new(numerator, denominator).unwrap();
         assert_eq!(r.double_value(), 1.5);
+    }
+
+    #[test]
+    fn double_value_carry_at_top_rounds_to_infinity() {
+        // (2^1025 - 1) / 2 = 2^1024 - 0.5, which rounds past f64::MAX
+        let n = (BigInt::from(1) << 1025usize) - BigInt::from(1);
+        let r = BoundedRational::new(n, BigInt::from(2)).unwrap();
+        assert_eq!(r.double_value(), f64::INFINITY);
+    }
+
+    #[test]
+    fn double_value_subnormal_carry_to_min_positive() {
+        // (2^60 - 1) / 2^(1022 + 60), just under f64::MIN_POSITIVE
+        let n = (BigInt::from(1) << 60usize) - BigInt::from(1);
+        let d = BigInt::from(1) << 1082usize;
+        let r = BoundedRational::new(n, d).unwrap();
+        assert_eq!(r.double_value(), f64::MIN_POSITIVE); // 2.2250738585072014e-308
     }
 
     // ── to_string_truncated ──────────────────────────────────────────────────
