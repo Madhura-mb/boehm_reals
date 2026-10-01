@@ -291,7 +291,7 @@ impl BoundedRational {
 
         // --- Fast path: whole numbers reuse the integer constructor. ---
         let rounded = x.round();
-        if rounded == x && rounded >= -TWO_POW_63 && rounded < TWO_POW_63 {
+        if rounded == x && (-TWO_POW_63..TWO_POW_63).contains(&rounded) {
             return Ok(BoundedRational::value_of_long(rounded as i64));
         }
 
