@@ -65,7 +65,7 @@ macro_rules! boundedrational_mul {
                 || result_num_bits > threshold
                 || result_den_bits > threshold
             {
-                (a.reduce().positive_den(), b.reduce().positive_den())
+                (a.reduce(), b.reduce())
             } else {
                 (a, b)
             };

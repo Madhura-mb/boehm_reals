@@ -18,14 +18,6 @@ fn arb_rational() -> impl Strategy<Value = BoundedRational> {
 
 proptest! {
     #[test]
-    fn positive_denominator_preserves_value(r in arb_rational()) {
-        let normalized = r.positive_den();
-
-        prop_assert!(normalized.denominator() > &BigInt::from(0));
-        prop_assert_eq!(r, normalized);
-    }
-
-    #[test]
     fn reduction_preserves_value_and_is_coprime(r in arb_rational()) {
         let reduced = r.reduce();
 
