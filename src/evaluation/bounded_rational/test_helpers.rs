@@ -7,11 +7,8 @@ pub(crate) fn br(n: i64, d: i64) -> BoundedRational {
 }
 
 pub(crate) fn assert_value(r: &BoundedRational, num: i64, den: i64) {
-    let reduced = r.reduce().positive_den();
-    let expected = BoundedRational::from_longs(num, den)
-        .unwrap()
-        .reduce()
-        .positive_den();
+    let reduced = r.reduce();
+    let expected = BoundedRational::from_longs(num, den).unwrap().reduce();
     assert_eq!(*reduced.numerator(), *expected.numerator());
     assert_eq!(*reduced.denominator(), *expected.denominator());
 }

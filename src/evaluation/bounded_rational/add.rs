@@ -38,8 +38,8 @@ macro_rules! boundedrational_add {
                 + $b.denominator().bits();
 
             if input_bits > (MAX_SIZE as u64 * 3 / 4) {
-                let ra = $a.reduce().positive_den();
-                let rb = $b.reduce().positive_den();
+                let ra = $a.reduce();
+                let rb = $b.reduce();
 
                 let den = ra.denominator() * rb.denominator();
                 let num = ra.numerator() * rb.denominator() + ra.denominator() * rb.numerator();
@@ -604,8 +604,8 @@ mod add_tests {
     fn add_is_commutative() {
         let a = br(3, 7);
         let b = br(5, 11);
-        let sum1 = (&a + &b).reduce().positive_den();
-        let sum2 = (&b + &a).reduce().positive_den();
+        let sum1 = (&a + &b).reduce();
+        let sum2 = (&b + &a).reduce();
         assert_eq!(sum1.numerator(), sum2.numerator());
         assert_eq!(sum1.denominator(), sum2.denominator());
     }
@@ -936,8 +936,8 @@ mod add_tests {
     fn bigint_plus_boundedrational_matches_reverse_order() {
         let a = br(2, 3);
         let b = BigInt::from(5);
-        let sum1 = (a.clone() + b.clone()).reduce().positive_den();
-        let sum2 = (b + a).reduce().positive_den();
+        let sum1 = (a.clone() + b.clone()).reduce();
+        let sum2 = (b + a).reduce();
         assert_eq!(sum1.numerator(), sum2.numerator());
         assert_eq!(sum1.denominator(), sum2.denominator());
     }
@@ -1097,29 +1097,29 @@ mod add_tests {
     fn scalar_plus_br_matches_br_plus_scalar_all_types() {
         let a = br(3, 7);
 
-        let s1 = (5u32 + a.clone()).reduce().positive_den();
-        let s2 = (a.clone() + 5u32).reduce().positive_den();
+        let s1 = (5u32 + a.clone()).reduce();
+        let s2 = (a.clone() + 5u32).reduce();
         assert_eq!(s1.numerator(), s2.numerator());
         assert_eq!(s1.denominator(), s2.denominator());
 
-        let s3 = (5u64 + a.clone()).reduce().positive_den();
-        let s4 = (a.clone() + 5u64).reduce().positive_den();
+        let s3 = (5u64 + a.clone()).reduce();
+        let s4 = (a.clone() + 5u64).reduce();
         assert_eq!(s3.numerator(), s4.numerator());
 
-        let s5 = (5u128 + a.clone()).reduce().positive_den();
-        let s6 = (a.clone() + 5u128).reduce().positive_den();
+        let s5 = (5u128 + a.clone()).reduce();
+        let s6 = (a.clone() + 5u128).reduce();
         assert_eq!(s5.numerator(), s6.numerator());
 
-        let s7 = ((-5i32) + a.clone()).reduce().positive_den();
-        let s8 = (a.clone() + (-5i32)).reduce().positive_den();
+        let s7 = ((-5i32) + a.clone()).reduce();
+        let s8 = (a.clone() + (-5i32)).reduce();
         assert_eq!(s7.numerator(), s8.numerator());
 
-        let s9 = ((-5i64) + a.clone()).reduce().positive_den();
-        let s10 = (a.clone() + (-5i64)).reduce().positive_den();
+        let s9 = ((-5i64) + a.clone()).reduce();
+        let s10 = (a.clone() + (-5i64)).reduce();
         assert_eq!(s9.numerator(), s10.numerator());
 
-        let s11 = ((-5i128) + a.clone()).reduce().positive_den();
-        let s12 = (a + (-5i128)).reduce().positive_den();
+        let s11 = ((-5i128) + a.clone()).reduce();
+        let s12 = (a + (-5i128)).reduce();
         assert_eq!(s11.numerator(), s12.numerator());
     }
 }
