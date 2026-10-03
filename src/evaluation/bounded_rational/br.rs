@@ -1280,6 +1280,12 @@ mod tests {
     }
 
     #[test]
+    fn value_of_double_large_fraction() {
+        let r = BoundedRational::value_of_double(1024.5).unwrap().reduce();
+        assert_eq!(r.numerator(), &BigInt::from(2049));
+        assert_eq!(r.denominator(), &BigInt::from(2));
+    }
+    #[test]
     fn value_of_double_two_pow_63_is_exact() {
         let r = BoundedRational::value_of_double(2f64.powi(63)).unwrap();
         assert_eq!(*r.numerator(), BigInt::from(1u8) << 63usize);
