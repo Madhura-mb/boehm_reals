@@ -259,7 +259,8 @@ impl BoundedRational {
     /// Converts a given `f64` into `BoundedRational`.
     ///
     /// # Fast path
-    /// If `x` is a finite whole number that fits within the `i64` range,
+    /// If `x` is a finite whole number in the half-open range
+    /// `[-2^63, 2^63)` (exactly the values representable as an `i64`),
     /// it is converted using `value_of_long()`. This avoids the overhead
     /// of decomposing the IEEE 754 representation.
     ///
@@ -284,9 +285,13 @@ impl BoundedRational {
             return Err(NonFiniteError);
         }
 
+        // `i64::MAX as f64` rounds up to 2^63, which is too big for an i64.
+        // So the upper limit must be "less than 2^63", not "less than or equal".
+        const TWO_POW_63: f64 = 9_223_372_036_854_775_808.0;
+
         // --- Fast path: whole numbers reuse the integer constructor. ---
         let rounded = x.round();
-        if rounded == x && rounded >= i64::MIN as f64 && rounded <= i64::MAX as f64 {
+        if rounded == x && (-TWO_POW_63..TWO_POW_63).contains(&rounded) {
             return Ok(BoundedRational::value_of_long(rounded as i64));
         }
 
@@ -1275,35 +1280,60 @@ mod tests {
     }
 
     #[test]
-    fn value_of_double_large_power_of_two() {
-        let r = BoundedRational::value_of_double(2f64.powi(60)).unwrap();
-
-        assert_eq!(r.denominator(), &BigInt::from(1));
-        assert_eq!(r.numerator(), &(BigInt::from(1) << 60));
-    }
-
-    #[test]
     fn value_of_double_large_fraction() {
         let r = BoundedRational::value_of_double(1024.5).unwrap().reduce();
-
         assert_eq!(r.numerator(), &BigInt::from(2049));
         assert_eq!(r.denominator(), &BigInt::from(2));
     }
-
     #[test]
-    fn value_of_double_i64_max() {
-        let r = BoundedRational::value_of_double(i64::MAX as f64).unwrap();
-
-        assert_eq!(r.denominator(), &BigInt::from(1));
-        assert_eq!(r.numerator(), &BigInt::from(i64::MAX));
+    fn value_of_double_two_pow_63_is_exact() {
+        let r = BoundedRational::value_of_double(2f64.powi(63)).unwrap();
+        assert_eq!(*r.numerator(), BigInt::from(1u8) << 63usize);
+        assert_eq!(*r.denominator(), BigInt::from(1u8));
+        assert_ne!(*r.numerator(), BigInt::from(i64::MAX));
     }
 
     #[test]
-    fn value_of_double_below_i64_min_uses_slow_path() {
-        let r = BoundedRational::value_of_double(-1e100).unwrap();
+    fn value_of_double_minus_two_pow_63_is_exact() {
+        let r = BoundedRational::value_of_double(-(2f64.powi(63))).unwrap();
+        assert_eq!(*r.numerator(), BigInt::from(i64::MIN));
+        assert_eq!(*r.denominator(), BigInt::from(1u8));
+    }
 
-        assert_eq!(r.denominator(), &BigInt::from(1));
-        assert_ne!(r.numerator(), &BigInt::from(i64::MIN));
+    #[test]
+    fn value_of_double_two_pow_64_is_exact() {
+        let r = BoundedRational::value_of_double(2f64.powi(64)).unwrap();
+        assert_eq!(*r.numerator(), BigInt::from(1u8) << 64usize);
+        assert_eq!(*r.denominator(), BigInt::from(1u8));
+    }
+
+    #[test]
+    fn value_of_double_minus_two_pow_64_is_exact() {
+        let r = BoundedRational::value_of_double(-(2f64.powi(64))).unwrap();
+        assert_eq!(*r.numerator(), -(BigInt::from(1u8) << 64usize));
+        assert_eq!(*r.denominator(), BigInt::from(1u8));
+    }
+
+    #[test]
+    fn value_of_double_largest_below_two_pow_63_is_exact() {
+        // Largest f64 below 2^63 is 2^63 - 1024.
+        let r = BoundedRational::value_of_double(2f64.powi(63) - 1024.0).unwrap();
+        assert_eq!(*r.numerator(), BigInt::from(9_223_372_036_854_774_784_i64));
+        assert_eq!(*r.denominator(), BigInt::from(1u8));
+    }
+
+    #[test]
+    fn value_of_double_smallest_above_minus_two_pow_63_is_exact() {
+        let r = BoundedRational::value_of_double(-(2f64.powi(63) - 1024.0)).unwrap();
+        assert_eq!(*r.numerator(), BigInt::from(-9_223_372_036_854_774_784_i64));
+        assert_eq!(*r.denominator(), BigInt::from(1u8));
+    }
+
+    #[test]
+    fn value_of_double_non_finite_is_rejected() {
+        assert!(BoundedRational::value_of_double(f64::NAN).is_err());
+        assert!(BoundedRational::value_of_double(f64::INFINITY).is_err());
+        assert!(BoundedRational::value_of_double(f64::NEG_INFINITY).is_err());
     }
 
     // ── negate ─────────────────────────────────────────────────────────────────
