@@ -363,19 +363,8 @@ impl BoundedRational {
         if r.numerator == *ZERO {
             return Err(ZeroDivisionError);
         }
-        // The old denominator is positive, so only the old numerator's sign
-        // can end up in the new denominator; move it to the new numerator.
-        if r.numerator < *ZERO {
-            Ok(BoundedRational {
-                numerator: -r.denominator,
-                denominator: -r.numerator,
-            })
-        } else {
-            Ok(BoundedRational {
-                numerator: r.denominator,
-                denominator: r.numerator,
-            })
-        }
+
+        Ok(BoundedRational::new(r.denominator, r.numerator)?)
     }
 
     /// Returns the sign of this rational: `-1` if negative, `0` if zero, `1` if positive.
