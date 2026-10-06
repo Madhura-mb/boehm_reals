@@ -39,12 +39,10 @@ pub struct NonFiniteError;
 impl std::fmt::Display for NonFiniteError {
     /// Formats as `numerator/denominator` using the stored values.
     ///
-    /// The sign always appears on the numerator (`-1/3`, never `1/-3`),
-    /// and a zero denominator cannot occur. The fraction is **not**
-    /// necessarily in lowest terms: `2/4` prints as `2/4`. This is a
-    /// debug/log representation, not a user-facing one; use
-    /// [`to_string_truncated`](BoundedRational::to_string_truncated) for
-    /// decimal output.
+    /// The fraction is **not** necessarily in lowest terms:
+    /// `2/4` prints as `2/4`. This is a debug/log representation,
+    ///  not a user-facing one; use [`to_string_truncated`]
+    /// (BoundedRational::to_string_truncated) for decimal output.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
