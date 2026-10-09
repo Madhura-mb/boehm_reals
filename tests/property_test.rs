@@ -18,19 +18,23 @@ fn arb_rational() -> impl Strategy<Value = BoundedRational> {
 
 proptest! {
     #[test]
-    fn positive_denominator_preserves_value(r in arb_rational()) {
-        let normalized = r.positive_den();
-
-        prop_assert!(normalized.denominator() > &BigInt::from(0));
-        prop_assert_eq!(r, normalized);
-    }
-
-    #[test]
     fn reduction_preserves_value_and_is_coprime(r in arb_rational()) {
         let reduced = r.reduce();
 
         prop_assert_eq!(r, reduced.clone());
         prop_assert_eq!(reduced.numerator().gcd(reduced.denominator()), BigInt::from(1));
+    }
+
+    #[test]
+    fn denominator_is_positive(r in arb_rational()) {
+        prop_assert!(r.denominator() > &BigInt::from(0));
+    }
+
+    #[test]
+    fn zero_is_stored_as_zero_over_one(d in any::<i64>().prop_filter("non-zero", |d| *d != 0)) {
+        let r = rational(0, d);
+        prop_assert_eq!(r.numerator(), &BigInt::from(0));
+        prop_assert_eq!(r.denominator(), &BigInt::from(1));
     }
 
     #[test]
@@ -45,13 +49,8 @@ proptest! {
     fn compare_to_agrees_with_cross_multiplication(left in arb_rational(), right in arb_rational()) {
         let lhs = left.numerator() * right.denominator();
         let rhs = right.numerator() * left.denominator();
-        let expected = if (left.denominator() < &BigInt::from(0)) ^ (right.denominator() < &BigInt::from(0)) {
-            lhs.cmp(&rhs).reverse()
-        } else {
-            lhs.cmp(&rhs)
-        };
 
-        prop_assert_eq!(left.compare_to(&right), expected);
+        prop_assert_eq!(left.compare_to(&right), lhs.cmp(&rhs));
     }
 
     #[test]
@@ -63,5 +62,33 @@ proptest! {
         if let Ok(rational) = converted {
             prop_assert!(rational.denominator() > &BigInt::from(0));
         }
+    }
+
+    #[test]
+    fn add_keeps_denominator_positive(a in arb_rational(), b in arb_rational()) {
+        prop_assert!((&a).add(&b).denominator() > &BigInt::from(0));
+    }
+
+    #[test]
+    fn mul_keeps_denominator_positive(a in arb_rational(), b in arb_rational()) {
+        prop_assert!((&a * &b).denominator() > &BigInt::from(0));
+    }
+
+    #[test]
+    fn sub_keeps_denominator_positive(a in arb_rational(), b in arb_rational()) {
+        prop_assert!((&a - &b).denominator() > &BigInt::from(0));
+    }
+
+    #[test]
+    fn div_keeps_denominator_positive(
+        a in arb_rational(),
+        b in arb_rational().prop_filter("divisor must be non-zero", |b| b.numerator() != &BigInt::from(0)),
+    ) {
+        prop_assert!((&a / &b).denominator() > &BigInt::from(0));
+    }
+
+    #[test]
+    fn neg_keeps_denominator_positive(a in arb_rational()) {
+        prop_assert!((-&a).denominator() > &BigInt::from(0));
     }
 }

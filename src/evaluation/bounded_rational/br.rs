@@ -37,6 +37,12 @@ impl From<ZeroDenominatorError> for ZeroDivisionError {
 pub struct NonFiniteError;
 
 impl std::fmt::Display for NonFiniteError {
+    /// Formats as `numerator/denominator` using the stored values.
+    ///
+    /// The fraction is **not** necessarily in lowest terms:
+    /// `2/4` prints as `2/4`. This is a debug/log representation,
+    ///  not a user-facing one; use [`to_string_truncated`]
+    /// (BoundedRational::to_string_truncated) for decimal output.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -64,16 +70,18 @@ fn signum_bigint(x: &BigInt) -> i32 {
 /// Values are kept exact throughout these operations.
 ///
 /// # Invariants
-/// - The denominator is never zero.
+/// - The denominator is never zero. It is always strictly positive.
+///   The sign of the value lives entirely in the numerator.
+/// - A zero value is always stored as `0/1`.
 /// - Fractions are not always fully reduced; simplification happens
 ///   occasionally at random to avoid paying the cost of GCD on every
 ///   operation.
 
 #[derive(Clone, Debug)]
 pub struct BoundedRational {
-    /// The top half of the fraction.
+    /// The top half of the fraction. Carries the sign of the value.
     numerator: BigInt,
-    /// The bottom half of the fraction. Must never be zero.
+    /// The bottom half of the fraction. Must never be zero. Always strictly positive.
     denominator: BigInt,
 }
 
@@ -90,6 +98,9 @@ impl BoundedRational {
 
     /// Creates a new `BoundedRational` with the given numerator and denominator.
     ///
+    /// A negative denominator is normalised by negating both parts, so the
+    /// stored denominator is always positive.
+    ///
     /// Error: Returns `Err(ZeroDenominatorError)` if `d` is zero.
     pub fn new(n: BigInt, d: BigInt) -> Result<Self, ZeroDenominatorError> {
         if d == *ZERO {
@@ -99,6 +110,12 @@ impl BoundedRational {
             return Ok(BoundedRational {
                 numerator: ZERO.clone(),
                 denominator: ONE.clone(),
+            });
+        }
+        if d < *ZERO {
+            return Ok(BoundedRational {
+                numerator: -n,
+                denominator: -d,
             });
         }
         Ok(BoundedRational {
@@ -154,35 +171,12 @@ impl BoundedRational {
         self.numerator.bits() + self.denominator.bits() > MAX_SIZE as u64
     }
 
-    /// Returns a clone of this rational with a positive denominator.
-    ///
-    /// If the denominator is negative, both numerator and denominator are negated,
-    /// preserving the value while ensuring `denominator > 0`. If the denominator is
-    /// already positive. the value is returned unchanged.
-    ///
-    /// Note: a zero denominator cannot arise here because `new` rejects it at
-    /// construction time.
-    pub fn positive_den(&self) -> BoundedRational {
-        if self.denominator < *ZERO {
-            BoundedRational {
-                numerator: -&self.numerator,
-                denominator: -&self.denominator,
-            }
-        } else {
-            self.clone()
-        }
-    }
-
     /// Return an equivalent fractions in lowest terms.
     ///
     /// Divides both numerator and denominator by their GCD.
-    /// Denominator sign is **not** normalized here - call [`positive_den`]
-    /// afterwards is a canonical positive denominator is required.
     ///
     /// An early return fires when the denominator is already `1`, because an
     /// integer needs no reduction.
-    ///
-    /// [`positive_den`]: BoundedRational::positive_den
     pub fn reduce(&self) -> BoundedRational {
         // already an integer - nothing to cancel.
         if self.denominator == *ONE {
@@ -200,7 +194,7 @@ impl BoundedRational {
     /// Return a possibly-reduced version of `r`.
     ///
     /// # Reduction policy
-    /// Reduction (via [`reduce`] + [`positive_den`]) is performed when either:
+    /// Reduction (via [`reduce`]) is performed when either:
     /// - the value is already [`too_big`], **or**
     /// - a 1-in-16 random chance fires to reduce the cost of repeated GCD
     ///   calculations across many operations.
@@ -211,7 +205,6 @@ impl BoundedRational {
     /// [`too_big`] to determine whether further handling is required.
     ///
     /// [`reduce`]: BoundedRational::reduce
-    /// [`positive_den`]: BoundedRational::positive_den
     /// [`too_big`]: BoundedRational::too_big
     pub fn maybe_reduce(r: BoundedRational) -> BoundedRational {
         let should_reduce = r.too_big() || (rand::rng().next_u32() & 0xf) == 0;
@@ -220,7 +213,7 @@ impl BoundedRational {
             return r;
         }
 
-        r.positive_den().reduce()
+        r.reduce()
     }
 
     ///Converts an `i64` into a `BoundedRational`.
@@ -349,8 +342,7 @@ impl BoundedRational {
     /// reduced first.
     ///
     /// The comparison also handles different sign representations. For example,
-    /// both 1/1 and -1/-1 are equal to 1, while both -1/1 and 1/-1
-    /// are equal to -1.
+    ///  1/1 is equal to 1, while -1/1 and is equal to -1.
     pub fn equals_to_bigint(&self, n: &BigInt) -> bool {
         if *n == *ZERO {
             self.numerator == *ZERO
@@ -369,18 +361,13 @@ impl BoundedRational {
         if r.numerator == *ZERO {
             return Err(ZeroDivisionError);
         }
-        Ok(BoundedRational {
-            numerator: r.denominator,
-            denominator: r.numerator,
-        })
+
+        Ok(BoundedRational::new(r.denominator, r.numerator)?)
     }
 
     /// Returns the sign of this rational: `-1` if negative, `0` if zero, `1` if positive.
-    ///
-    /// A fraction's sign is the sign of the numerator times the sign of the
-    /// denominator. So `-3/4` and `3/-4` both correctly report `-1`.
     pub fn signum(&self) -> i32 {
-        signum_bigint(&self.numerator) * signum_bigint(&self.denominator)
+        signum_bigint(&self.numerator)
     }
 
     /// Multiplies `n1` and `n2`, skipping the multiplication when either side
@@ -413,9 +400,6 @@ impl BoundedRational {
     ///    denominator of `1`/`-1` (by far the most common case — e.g. either
     ///    side being a plain integer) is handled without a full `BigInt`
     ///    multiplication. This also avoids doing any division.
-    /// 3. Because a denominator can technically be stored as negative, the
-    ///    result of the cross-multiplication is flipped if exactly one of the two
-    ///    denominators is negative.
     pub fn compare_to(&self, other: &BoundedRational) -> Ordering {
         let sign1 = self.signum();
         let sign2 = other.signum();
@@ -430,14 +414,7 @@ impl BoundedRational {
 
         let lhs = Self::cross_multiply(&self.numerator, &other.denominator);
         let rhs = Self::cross_multiply(&other.numerator, &self.denominator);
-        let cross = lhs.cmp(&rhs);
-
-        let den_sign_product = signum_bigint(&self.denominator) * signum_bigint(&other.denominator);
-        if den_sign_product < 0 {
-            cross.reverse()
-        } else {
-            cross
-        }
+        lhs.cmp(&rhs)
     }
 
     /// Returns this value as an `i64`, provided it is a whole number.
@@ -450,7 +427,7 @@ impl BoundedRational {
     /// Returns `Err` if the reduced denominator isn't `1`, or if the
     /// resulting numerator doesn't fit in an `i64`.
     pub fn int_value(&self) -> Result<i64, &'static str> {
-        let reduced = self.reduce().positive_den();
+        let reduced = self.reduce();
         if reduced.denominator != *ONE {
             return Err("intValue of non-int");
         }
@@ -467,8 +444,8 @@ impl BoundedRational {
     ///
     /// # Fast path
     /// The value is first reduced to lowest terms with a positive
-    /// denominator via [`reduce`](Self::reduce) +
-    /// [`positive_den`](Self::positive_den). If the resulting denominator is `1` (i.e. this value is a whole number), the numerator
+    /// denominator via [`reduce`](Self::reduce).
+    /// If the resulting denominator is `1` (i.e. this value is a whole number), the numerator
     /// is converted to `f64` directly via `BigInt`'s built-in conversion,
     /// skipping the manual bit-manipulation path entirely.
     ///
@@ -491,7 +468,7 @@ impl BoundedRational {
     /// approximation of the rational number while handling very small and
     /// very large values safely.
     pub fn double_value(&self) -> f64 {
-        let nicer = self.reduce().positive_den();
+        let nicer = self.reduce();
 
         // Fast path: whole numbers convert directly, no bit manipulation needed.
         if nicer.denominator == *ONE {
@@ -606,10 +583,7 @@ impl BoundedRational {
         if num_abs < *ZERO {
             num_abs = -num_abs;
         }
-        let mut den_abs = self.denominator.clone();
-        if den_abs < *ZERO {
-            den_abs = -den_abs;
-        }
+        let den_abs = self.denominator.clone();
 
         let sign = if self.signum() < 0 { "-" } else { "" };
 
@@ -683,7 +657,7 @@ impl Hash for BoundedRational {
     /// positive, so every value that compares equal ends up with an
     /// identical numerator/denominator pair before hashing.
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let reduced = self.reduce().positive_den();
+        let reduced = self.reduce();
         reduced.numerator.hash(state);
         reduced.denominator.hash(state);
     }
@@ -806,15 +780,15 @@ mod tests {
     #[test]
     fn new_valid_negative_denominator() {
         let r = BoundedRational::new(BigInt::from(3), BigInt::from(-4)).unwrap();
-        assert_eq!(*r.numerator(), BigInt::from(3));
-        assert_eq!(*r.denominator(), BigInt::from(-4));
+        assert_eq!(*r.numerator(), BigInt::from(-3));
+        assert_eq!(*r.denominator(), BigInt::from(4));
     }
 
     #[test]
     fn new_valid_both_negative() {
         let r = BoundedRational::new(BigInt::from(-3), BigInt::from(-4)).unwrap();
-        assert_eq!(*r.numerator(), BigInt::from(-3));
-        assert_eq!(*r.denominator(), BigInt::from(-4));
+        assert_eq!(*r.numerator(), BigInt::from(3));
+        assert_eq!(*r.denominator(), BigInt::from(4));
     }
 
     #[test]
@@ -822,6 +796,20 @@ mod tests {
         let r = BoundedRational::new(BigInt::from(0), BigInt::from(5)).unwrap();
         assert_eq!(*r.numerator(), *ZERO);
         assert_eq!(*r.denominator(), *ONE);
+    }
+
+    #[test]
+    fn new_valid_denominator_negative() {
+        let r = BoundedRational::new(BigInt::from(5), BigInt::from(-1)).unwrap();
+        assert_eq!(*r.numerator(), BigInt::from(-5));
+        assert_eq!(*r.denominator(), BigInt::from(1));
+    }
+
+    #[test]
+    fn new_valid_zero_with_negative_denominator() {
+        let r = BoundedRational::new(BigInt::from(0), BigInt::from(-7)).unwrap();
+        assert_eq!(*r.numerator(), BigInt::from(0));
+        assert_eq!(*r.denominator(), BigInt::from(1));
     }
 
     #[test]
@@ -844,7 +832,7 @@ mod tests {
     #[test]
     fn new_denominator_of_minus_one_is_valid() {
         let r = BoundedRational::new(BigInt::from(7), BigInt::from(-1)).unwrap();
-        assert_eq!(*r.denominator(), *MINUS_ONE);
+        assert_eq!(*r.denominator(), *ONE);
     }
 
     // ── from_bigint ──────────────────────────────────────────────────────────
@@ -925,8 +913,8 @@ mod tests {
     #[test]
     fn from_longs_both_negative() {
         let r = BoundedRational::from_longs(-3, -4).unwrap();
-        assert_eq!(*r.numerator(), BigInt::from(-3));
-        assert_eq!(*r.denominator(), BigInt::from(-4));
+        assert_eq!(*r.numerator(), BigInt::from(3));
+        assert_eq!(*r.denominator(), BigInt::from(4));
     }
 
     #[test]
@@ -975,78 +963,6 @@ mod tests {
         let pos = BoundedRational::new(big_with_bits(half + 1), big_with_bits(half)).unwrap();
         let neg = BoundedRational::new(-big_with_bits(half + 1), big_with_bits(half)).unwrap();
         assert_eq!(pos.too_big(), neg.too_big());
-    }
-
-    // ── positive_den ─────────────────────────────────────────────────────────
-
-    #[test]
-    fn positive_den_already_positive_unchanged() {
-        let r = BoundedRational::from_longs(3, 4).unwrap();
-        let p = r.positive_den();
-        assert_eq!(*p.numerator(), BigInt::from(3));
-        assert_eq!(*p.denominator(), BigInt::from(4));
-    }
-
-    #[test]
-    fn positive_den_negative_denominator_flips_both() {
-        let r = BoundedRational::from_longs(3, -4).unwrap();
-        let p = r.positive_den();
-        assert_eq!(*p.numerator(), BigInt::from(-3));
-        assert_eq!(*p.denominator(), BigInt::from(4));
-    }
-
-    #[test]
-    fn positive_den_both_negative_flips_both() {
-        let r = BoundedRational::from_longs(-3, -4).unwrap();
-        let p = r.positive_den();
-        assert_eq!(*p.numerator(), BigInt::from(3));
-        assert_eq!(*p.denominator(), BigInt::from(4));
-    }
-
-    #[test]
-    fn positive_den_negative_num_positive_den_unchanged() {
-        let r = BoundedRational::from_longs(-3, 4).unwrap();
-        let p = r.positive_den();
-        assert_eq!(*p.numerator(), BigInt::from(-3));
-        assert_eq!(*p.denominator(), BigInt::from(4));
-    }
-
-    #[test]
-    fn positive_den_denominator_minus_one() {
-        let r = BoundedRational::from_longs(5, -1).unwrap();
-        let p = r.positive_den();
-        assert_eq!(*p.numerator(), BigInt::from(-5));
-        assert_eq!(*p.denominator(), *ONE);
-    }
-
-    #[test]
-    fn positive_den_zero_numerator_negative_den() {
-        let r = BoundedRational::from_longs(0, -7).unwrap();
-        let p = r.positive_den();
-        assert_eq!(*p.numerator(), *ZERO);
-        assert_eq!(*p.denominator(), *ONE);
-    }
-
-    #[test]
-    fn positive_den_is_idempotent() {
-        // Calling positive_den twice should give the same result as calling it once
-        let r = BoundedRational::from_longs(3, -4).unwrap();
-        let once = r.positive_den();
-        let twice = once.positive_den();
-        assert_eq!(twice.numerator(), once.numerator());
-        assert_eq!(twice.denominator(), once.denominator());
-    }
-
-    #[test]
-    fn positive_den_preserves_value() {
-        // 3/-4 and -3/4 represent the same rational — cross-multiply to verify
-        let r = BoundedRational::from_longs(3, -4).unwrap();
-        let p = r.positive_den();
-        // r.num * p.den == p.num * r.den  →  3 * 4 == -3 * -4  →  12 == 12
-        assert_eq!(
-            r.numerator() * p.denominator(),
-            p.numerator() * r.denominator()
-        );
     }
 
     // ── reduce ───────────────────────────────────────────────────────────────
@@ -1362,8 +1278,8 @@ mod tests {
     fn inverse_negative_numerator() {
         let r = BoundedRational::from_longs(-2, 3).unwrap();
         let inv = BoundedRational::inverse(r).unwrap();
-        assert_eq!(inv.numerator(), &BigInt::from(3));
-        assert_eq!(inv.denominator(), &BigInt::from(-2));
+        assert_eq!(inv.numerator(), &BigInt::from(-3));
+        assert_eq!(inv.denominator(), &BigInt::from(2));
     }
 
     #[test]
@@ -2012,9 +1928,9 @@ mod tests {
     }
 
     #[test]
-    fn display_negative_denominator_shown_raw() {
+    fn display_negative_denominator_as_positive() {
         let r = BoundedRational::from_longs(3, -4).unwrap();
-        assert_eq!(r.to_string(), "3/-4");
+        assert_eq!(r.to_string(), "-3/4");
     }
 
     // ── Neg Traits ──────────────────────────────────────────────────────────────
