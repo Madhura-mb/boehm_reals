@@ -23,7 +23,7 @@ fuzz_target!(|data: &[u8]| {
     let right = BoundedRational::from_longs(right_numerator, right_denominator).ok();
 
     if let Some(ref value) = left {
-        let _ = value.positive_den();
+        let _ = value;
         let _ = value.reduce();
         let _ = value.signum();
     }
