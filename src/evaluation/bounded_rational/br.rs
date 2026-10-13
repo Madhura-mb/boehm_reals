@@ -178,6 +178,12 @@ impl BoundedRational {
     /// An early return fires when the denominator is already `1`, because an
     /// integer needs no reduction.
     pub fn reduce(&self) -> BoundedRational {
+        if self.numerator == *ZERO {
+            return BoundedRational {
+                numerator: ZERO.clone(),
+                denominator: ONE.clone(),
+            };
+        }
         // already an integer - nothing to cancel.
         if self.denominator == *ONE {
             return self.clone();
@@ -474,7 +480,10 @@ impl BoundedRational {
         if nicer.denominator == *ONE {
             // BigInt's to_f64 saturates to infinity for out-of-range magnitudes
             // rather than returning None, so this fallback is defensive only.
-            return nicer.numerator.to_f64().unwrap_or(f64::INFINITY);
+            return nicer
+                .numerator
+                .to_f64()
+                .expect("BigInt-to-f64 conversion unexpectedly returned None");
         }
 
         let sign = nicer.signum();
@@ -494,7 +503,7 @@ impl BoundedRational {
         // -1100 are unambiguously going to underflow to zero regardless, so
         // bailing out here also avoids doing an expensive big-integer division
         // for a result we already know will be ~0.
-        if appr_exp < -1100 || sign == 0 {
+        if appr_exp < -1100 {
             return 0.0;
         }
 
@@ -1028,6 +1037,14 @@ mod tests {
             r.numerator() * reduced.denominator(),
             r.denominator() * reduced.numerator()
         );
+    }
+
+    #[test]
+    fn reduce_zero_numerator() {
+        let r = BoundedRational::from_longs(0, 4).unwrap();
+        let reduced = r.reduce();
+        assert_eq!(*reduced.numerator(), BigInt::from(0));
+        assert_eq!(*reduced.denominator(), BigInt::from(1));
     }
 
     // ── maybe_reduce ─────────────────────────────────────────────────────────
