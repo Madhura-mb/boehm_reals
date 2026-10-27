@@ -189,6 +189,10 @@ impl BoundedRational {
             return self.clone();
         }
 
+        if self.numerator == *ONE || self.numerator == *MINUS_ONE {
+            return self.clone();
+        }
+
         let divisor = self.numerator.gcd(&self.denominator);
 
         BoundedRational {
@@ -418,27 +422,30 @@ impl BoundedRational {
             return Ordering::Equal;
         }
 
+        if self.denominator == other.denominator {
+            return self.numerator.cmp(&other.numerator);
+        }
+
         let lhs = Self::cross_multiply(&self.numerator, &other.denominator);
         let rhs = Self::cross_multiply(&other.numerator, &self.denominator);
         lhs.cmp(&rhs)
     }
 
-    /// Returns this value as an `i64`, provided it is a whole number.
+    /// Returns this value as an i64, provided it is a whole number.
     ///
-    /// The value is reduced first via [`reduce`](Self::reduce); if the reduced
-    /// denominator isn't `1` the value has a genuine fractional part and
-    /// isn't representable as an integer.
+    /// Divides the numerator by the denominator using integer division
+    /// with remainder. If the remainder isn't 0, the value has a
+    /// fractional part and isn't representable as an integer.
     ///
     /// # Errors
-    /// Returns `Err` if the reduced denominator isn't `1`, or if the
-    /// resulting numerator doesn't fit in an `i64`.
+    /// Returns Err if the remainder isn't 0, or if the resulting
+    /// quotient doesn't fit in an i64.
     pub fn int_value(&self) -> Result<i64, &'static str> {
-        let reduced = self.reduce();
-        if reduced.denominator != *ONE {
+        let (quotient, remainder) = self.numerator.div_rem(&self.denominator);
+        if remainder != *ZERO {
             return Err("intValue of non-int");
         }
-        reduced
-            .numerator
+        quotient
             .to_i64()
             .ok_or("intValue: numerator does not fit in i64")
     }
@@ -487,11 +494,13 @@ impl BoundedRational {
         }
 
         let sign = nicer.signum();
-        if sign < 0 {
-            return -BoundedRational::negate(nicer).double_value();
-        }
+        let pos_num = if sign > 0 {
+            nicer.numerator.clone()
+        } else {
+            -&nicer.numerator
+        };
 
-        let appr_exp = nicer.numerator.bits() as i64 - nicer.denominator.bits() as i64;
+        let appr_exp = pos_num.bits() as i64 - nicer.denominator.bits() as i64;
 
         // The smallest positive value representable by f64 at all is the
         // smallest subnormal, 2^-1074. If appr_exp were exact, anything below
@@ -523,9 +532,9 @@ impl BoundedRational {
         // down to 53 bits.
         let needed_prec = appr_exp - 80;
         let dividend = if needed_prec < 0 {
-            &nicer.numerator << (-needed_prec) as usize
+            &pos_num << (-needed_prec) as usize
         } else {
-            nicer.numerator.clone()
+            pos_num.clone()
         };
         let divisor = if needed_prec > 0 {
             &nicer.denominator << needed_prec as usize
@@ -546,7 +555,11 @@ impl BoundedRational {
         }
 
         if exponent > 1023 {
-            return f64::INFINITY;
+            return if sign < 0 {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            };
         }
 
         let rounding = BigInt::from(1) << (extra_bits - 1).max(0) as usize;
@@ -559,9 +572,15 @@ impl BoundedRational {
 
         // Exponent field reached 0x7FF: the rounded value overflowed.
         if bits >= 0x7FF0_0000_0000_0000 {
-            return f64::INFINITY;
+            return if sign < 0 {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            };
         }
-        f64::from_bits(bits)
+
+        let result = f64::from_bits(bits);
+        if sign < 0 { -result } else { result }
     }
 
     /// Returns a decimal string with exactly `n` digits after the decimal
